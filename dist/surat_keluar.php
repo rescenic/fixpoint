@@ -135,9 +135,17 @@ $data_surat = mysqli_query($conn, "SELECT sk.*, sm.no_surat AS no_masuk, u.nama 
         <div class="section-body">
 
           <div class="card">
-            <div class="card-header">
-              <h4>Manajemen Surat Keluar</h4>
-            </div>
+                <div class="card-header d-flex align-items-center justify-content-between">
+                <h4 class="mb-0">
+                  Manajemen Surat Keluar
+                  <i class="fas fa-question-circle text-danger ml-2"
+                     style="cursor:pointer;"
+                     data-toggle="modal"
+                     data-target="#modalBantuanSurat"
+                     title="Panduan Penggunaan">
+                  </i>
+                </h4>
+              </div>
             <div class="card-body">
 
               <ul class="nav nav-tabs" id="keluarTab" role="tablist">
@@ -239,6 +247,82 @@ $data_surat = mysqli_query($conn, "SELECT sk.*, sm.no_surat AS no_masuk, u.nama 
 
         </div>
       </section>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL BANTUAN SURAT KELUAR -->
+<div class="modal fade" id="modalBantuanSurat" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-info-circle"></i> Panduan Penggunaan – Surat Keluar
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <ol>
+          <li>
+            <b>Pembuatan Surat Keluar</b><br>
+            Menu ini digunakan untuk membuat surat resmi yang dikeluarkan oleh
+            rumah sakit, baik sebagai balasan surat masuk maupun surat inisiatif.
+          </li>
+          <hr>
+
+          <li>
+            <b>Balasan Surat Masuk</b><br>
+            Jika surat keluar merupakan balasan, pilih surat masuk terkait.
+            Sistem akan otomatis menandai surat masuk sebagai <b>Sudah Dibalas</b>.
+          </li>
+          <hr>
+
+          <li>
+            <b>Nomor & Tanggal Surat</b><br>
+            Pastikan nomor surat sesuai dengan penomoran resmi
+            dan tanggal surat sesuai dengan tanggal penerbitan.
+          </li>
+          <hr>
+
+          <li>
+            <b>Tujuan Surat</b><br>
+            Isi tujuan surat dengan jelas (instansi / perorangan)
+            agar surat dapat ditelusuri dan diarsipkan dengan baik.
+          </li>
+          <hr>
+
+          <li>
+            <b>Isi & Lampiran Surat</b><br>
+            Unggah file surat keluar dalam format <b>PDF</b>.
+            Pastikan file sudah final dan sesuai dengan isi surat.
+          </li>
+          <hr>
+
+          <li>
+            <b>Monitoring & Arsip</b><br>
+            Semua surat keluar yang tersimpan dapat dipantau kembali
+            melalui menu <b>Data Surat Keluar</b> dan <b>Arsip Digital</b>.
+          </li>
+        </ol>
+
+        <div class="alert alert-info mt-3">
+          <i class="fas fa-lightbulb"></i>
+          <b>Catatan:</b> Surat keluar yang sudah dikirim dan ditandatangani
+          sebaiknya tidak diubah kembali untuk menjaga keabsahan dokumen.
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">
+          Tutup
+        </button>
+      </div>
+
     </div>
   </div>
 </div>

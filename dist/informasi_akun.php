@@ -5,7 +5,9 @@ date_default_timezone_set('Asia/Jakarta');
 
 $user_id = $_SESSION['user_id'];
 
-// Ambil data user
+// =====================
+// AMBIL DATA USER
+// =====================
 $query = mysqli_query($conn, "SELECT * FROM users WHERE id = $user_id");
 $row = mysqli_fetch_assoc($query);
 
@@ -17,40 +19,41 @@ $data_user = [
     'jabatan' => $row['jabatan'],
     'unit_kerja' => $row['unit_kerja'],
     'atasan_id' => $row['atasan_id'],
-    'status' => $row['status'],
     'status_karyawan_id' => $row['status_karyawan_id'],
     'created_at' => $row['created_at']
 ];
 
-// Ambil daftar jabatan
+// =====================
+// DATA MASTER
+// =====================
 $daftar_jabatan_arr = [];
 $res = mysqli_query($conn, "SELECT id, nama_jabatan FROM jabatan");
 while($r = mysqli_fetch_assoc($res)) $daftar_jabatan_arr[] = $r;
 
-// Ambil daftar unit kerja
 $daftar_unit_arr = [];
 $res = mysqli_query($conn, "SELECT id, nama_unit FROM unit_kerja");
 while($r = mysqli_fetch_assoc($res)) $daftar_unit_arr[] = $r;
 
-// Ambil daftar atasan
 $daftar_atasan_arr = [];
 $res = mysqli_query($conn, "SELECT id, nama FROM users WHERE id != $user_id");
 while($r = mysqli_fetch_assoc($res)) $daftar_atasan_arr[] = $r;
 
-// Ambil daftar status karyawan
 $daftar_status_arr = [];
 $res = mysqli_query($conn, "SELECT id, nama_status FROM status_karyawan ORDER BY nama_status ASC");
 while($r = mysqli_fetch_assoc($res)) $daftar_status_arr[] = $r;
 
-// Nama atasan
+// =====================
+// NAMA ATASAN
+// =====================
 $nama_atasan = '-';
 if (!empty($data_user['atasan_id'])) {
-    $q_atasan = mysqli_query($conn, "SELECT nama FROM users WHERE id = '{$data_user['atasan_id']}' LIMIT 1");
-    $r_atasan = mysqli_fetch_assoc($q_atasan);
-    $nama_atasan = $r_atasan['nama'] ?? '-';
+    $q = mysqli_query($conn, "SELECT nama FROM users WHERE id='{$data_user['atasan_id']}' LIMIT 1");
+    $nama_atasan = mysqli_fetch_assoc($q)['nama'] ?? '-';
 }
 
-// Nama status karyawan
+// =====================
+// STATUS KARYAWAN
+// =====================
 $status_karyawan = '-';
 foreach($daftar_status_arr as $s){
     if($s['id'] == $data_user['status_karyawan_id']){
@@ -59,61 +62,80 @@ foreach($daftar_status_arr as $s){
     }
 }
 
-// Proses update
+// =====================
+// PROSES UPDATE
+// =====================
 $notif = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update'])) {
-    $nama = mysqli_real_escape_string($conn, $_POST['nama']);
+
+    $nik   = mysqli_real_escape_string($conn, $_POST['nik']);
+    $nama  = mysqli_real_escape_string($conn, $_POST['nama']);
     $email = mysqli_real_escape_string($conn, $_POST['email']);
     $no_hp = mysqli_real_escape_string($conn, $_POST['no_hp']);
+
     $jabatan_id = $_POST['jabatan'];
     $unit_kerja_id = $_POST['unit_kerja'];
     $atasan_id = intval($_POST['atasan_id']);
     $status_karyawan_id = intval($_POST['status_karyawan_id']);
     $password_baru = trim($_POST['password_baru'] ?? '');
 
-    // Nama jabatan & unit
+    // Nama jabatan
     $jabatan_nama = '';
     if (!empty($jabatan_id)) {
-        $res_jabatan = mysqli_query($conn, "SELECT nama_jabatan FROM jabatan WHERE id = '$jabatan_id' LIMIT 1");
-        $jabatan_nama = mysqli_fetch_assoc($res_jabatan)['nama_jabatan'] ?? '';
+        $q = mysqli_query($conn, "SELECT nama_jabatan FROM jabatan WHERE id='$jabatan_id' LIMIT 1");
+        $jabatan_nama = mysqli_fetch_assoc($q)['nama_jabatan'] ?? '';
     }
 
+    // Nama unit
     $unit_nama = '';
     if (!empty($unit_kerja_id)) {
-        $res_unit = mysqli_query($conn, "SELECT nama_unit FROM unit_kerja WHERE id = '$unit_kerja_id' LIMIT 1");
-        $unit_nama = mysqli_fetch_assoc($res_unit)['nama_unit'] ?? '';
+        $q = mysqli_query($conn, "SELECT nama_unit FROM unit_kerja WHERE id='$unit_kerja_id' LIMIT 1");
+        $unit_nama = mysqli_fetch_assoc($q)['nama_unit'] ?? '';
     }
 
-    $query_update = "UPDATE users SET 
-        nama='$nama', email='$email', no_hp='$no_hp', 
-        jabatan='$jabatan_nama', unit_kerja='$unit_nama', atasan_id=$atasan_id, status_karyawan_id=$status_karyawan_id";
+    $query_update = "
+        UPDATE users SET
+            nik='$nik',
+            nama='$nama',
+            email='$email',
+            no_hp='$no_hp',
+            jabatan='$jabatan_nama',
+            unit_kerja='$unit_nama',
+            atasan_id=$atasan_id,
+            status_karyawan_id=$status_karyawan_id
+    ";
+
     if (!empty($password_baru)) {
         $query_update .= ", password_hash='".password_hash($password_baru, PASSWORD_DEFAULT)."'";
     }
+
     $query_update .= " WHERE id=$user_id";
+
     $update = mysqli_query($conn, $query_update);
 
-    $notif = $update ? "Data akun berhasil diperbarui" : "Terjadi kesalahan: ".mysqli_error($conn);
-    if (!empty($password_baru) && $update) $notif = "Profil dan password berhasil diperbarui.";
+    if ($update) {
+        $notif = !empty($password_baru)
+            ? "Profil dan password berhasil diperbarui."
+            : "Data akun berhasil diperbarui.";
 
-    // Refresh data
-    $data_user['nama'] = $nama;
-    $data_user['email'] = $email;
-    $data_user['no_hp'] = $no_hp;
-    $data_user['jabatan'] = $jabatan_nama;
-    $data_user['unit_kerja'] = $unit_nama;
-    $data_user['atasan_id'] = $atasan_id;
-    $data_user['status_karyawan_id'] = $status_karyawan_id;
-    $nama_atasan = $nama_atasan;
-    $status_karyawan = '';
-    foreach($daftar_status_arr as $s){
-        if($s['id'] == $status_karyawan_id){
-            $status_karyawan = $s['nama_status'];
-            break;
-        }
+        // refresh data
+        $data_user['nik'] = $nik;
+        $data_user['nama'] = $nama;
+        $data_user['email'] = $email;
+        $data_user['no_hp'] = $no_hp;
+        $data_user['jabatan'] = $jabatan_nama;
+        $data_user['unit_kerja'] = $unit_nama;
+        $data_user['atasan_id'] = $atasan_id;
+        $data_user['status_karyawan_id'] = $status_karyawan_id;
+        $status_karyawan = $status_karyawan;
+    } else {
+        $notif = "Terjadi kesalahan: ".mysqli_error($conn);
     }
 }
 
+// =====================
+// FIELD VIEW
+// =====================
 $fields = [
     'nik'=>['label'=>'NIK','icon'=>'bi-credit-card'],
     'nama'=>['label'=>'Nama','icon'=>'bi-person'],
@@ -121,11 +143,12 @@ $fields = [
     'no_hp'=>['label'=>'No. HP','icon'=>'bi-phone'],
     'jabatan'=>['label'=>'Jabatan','icon'=>'bi-briefcase'],
     'unit_kerja'=>['label'=>'Unit Kerja','icon'=>'bi-building'],
-    'atasan'=>$nama_atasan ? ['label'=>'Atasan','icon'=>'bi-person-check'] : ['label'=>'Atasan','icon'=>'bi-person-check'],
+    'atasan'=>['label'=>'Atasan','icon'=>'bi-person-check'],
     'status_karyawan'=>['label'=>'Status Karyawan','icon'=>'bi-toggle-on'],
     'created_at'=>['label'=>'Daftar Akun','icon'=>'bi-calendar-check']
 ];
 ?>
+
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 
 <div class="card">
@@ -135,6 +158,14 @@ $fields = [
     <!-- Form Edit -->
     <form method="POST" id="formEditAkun" style="display:none;">
       <div class="row">
+
+        <div class="col-md-6 mb-2">
+  <label><i class="bi bi-badge-cc"></i> NIK Karyawan</label>
+  <input type="text" name="nik" class="form-control"
+         value="<?= htmlspecialchars($data_user['nik']) ?>" required>
+</div>
+
+
         <div class="col-md-6 mb-2">
           <label><i class="bi bi-person"></i> Nama</label>
           <input type="text" name="nama" class="form-control" value="<?= htmlspecialchars($data_user['nama']); ?>" required>

@@ -1,48 +1,148 @@
 <?php
+// ===== SECURITY HEADERS =====
+header("X-Frame-Options: DENY");
+header("X-Content-Type-Options: nosniff");
+header("X-XSS-Protection: 1; mode=block");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self';");
+
 session_start();
 require 'koneksi.php';
 
+// ===== REGENERATE SESSION ID (Prevent Session Fixation) =====
+if (!isset($_SESSION['initiated'])) {
+    session_regenerate_id(true);
+    $_SESSION['initiated'] = true;
+}
+
+// ===== GENERATE CSRF TOKEN =====
+if (empty($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
 $notif = "";
 
+// ===== GET ERROR MESSAGE FROM SESSION (PRG Pattern) =====
+if (isset($_SESSION['login_error'])) {
+    $notif = $_SESSION['login_error'];
+    unset($_SESSION['login_error']);
+}
+
+// ===== RATE LIMITING FUNCTION =====
+function checkRateLimit($ip, $conn) {
+    $max_attempts = 5;
+    $time_window = 180; // 3 menit (180 detik)
+    
+    // Bersihkan data lama
+    $conn->query("DELETE FROM login_attempts WHERE attempt_time < DATE_SUB(NOW(), INTERVAL {$time_window} SECOND)");
+    
+    // Hitung percobaan
+    $stmt = $conn->prepare("SELECT COUNT(*) as attempts FROM login_attempts WHERE ip_address = ? AND attempt_time > DATE_SUB(NOW(), INTERVAL {$time_window} SECOND)");
+    $stmt->bind_param("s", $ip);
+    $stmt->execute();
+    $result = $stmt->get_result()->fetch_assoc();
+    
+    return $result['attempts'] < $max_attempts;
+}
+
+// ===== RECORD LOGIN ATTEMPT =====
+function recordLoginAttempt($ip, $email, $success, $conn) {
+    $stmt = $conn->prepare("INSERT INTO login_attempts (ip_address, email, success, attempt_time) VALUES (?, ?, ?, NOW())");
+    $stmt->bind_param("ssi", $ip, $email, $success);
+    $stmt->execute();
+}
+
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['password'])) {
-    $email = trim($_POST['email']);
-    $password = trim($_POST['password']);
-    $captcha_input = strtoupper(trim($_POST['captcha_input'] ?? ''));
-    $captcha_session = $_SESSION['captcha'] ?? '';
-
-    if ($email === "" || $password === "") {
-        $notif = "Email dan Password tidak boleh kosong.";
-    } elseif ($captcha_input === "" || $captcha_input !== $captcha_session) {
-        $notif = "Kode keamanan salah atau kosong.";
+    
+    // ===== CSRF TOKEN VALIDATION =====
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $notif = "Permintaan tidak valid. Silakan muat ulang halaman.";
     } else {
-        $stmt = $conn->prepare("SELECT id, nama, password_hash, status FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $stmt->store_result();
-
-        if ($stmt->num_rows === 1) {
-            $stmt->bind_result($id, $nama, $password_hash, $status);
-            $stmt->fetch();
-
-            if ($status != 'active') {
-                $notif = "Akun belum aktif. Hubungi admin.";
-            } elseif (password_verify($password, $password_hash)) {
-                $_SESSION['user_id'] = $id;
-                $_SESSION['nama'] = $nama;
-
-                $update = $conn->prepare("UPDATE users SET last_login = NOW() WHERE id = ?");
-                $update->bind_param("i", $id);
-                $update->execute();
-
-                header("Location: dashboard.php");
-                exit;
-            } else {
-                $notif = "Password salah.";
-            }
+        $ip_address = $_SERVER['REMOTE_ADDR'];
+        
+        // ===== RATE LIMITING CHECK =====
+        if (!checkRateLimit($ip_address, $conn)) {
+            $notif = "Terlalu banyak percobaan login. Silakan coba lagi dalam 3 menit.";
         } else {
-            $notif = "Email tidak ditemukan.";
+            $email = trim($_POST['email']);
+            $password = trim($_POST['password']);
+            $captcha_input = strtoupper(trim($_POST['captcha_input'] ?? ''));
+            $captcha_session = $_SESSION['captcha'] ?? '';
+            
+            if ($email === "" || $password === "") {
+                $notif = "Email dan Password tidak boleh kosong.";
+                recordLoginAttempt($ip_address, $email, 0, $conn);
+            } elseif ($captcha_input === "" || $captcha_input !== $captcha_session) {
+                $notif = "Kode keamanan salah atau kosong.";
+                recordLoginAttempt($ip_address, $email, 0, $conn);
+            } else {
+                // Email validation
+                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                    $notif = "Format email tidak valid.";
+                    recordLoginAttempt($ip_address, $email, 0, $conn);
+                } else {
+                    $stmt = $conn->prepare("SELECT id, nama, password_hash, status FROM users WHERE email = ?");
+                    $stmt->bind_param("s", $email);
+                    $stmt->execute();
+                    $stmt->store_result();
+                    
+                    if ($stmt->num_rows === 1) {
+                        $stmt->bind_result($id, $nama, $password_hash, $status);
+                        $stmt->fetch();
+                        
+                        if ($status != 'active') {
+                            // Generic message untuk keamanan
+                            $notif = "Login gagal. Periksa kredensial Anda.";
+                            recordLoginAttempt($ip_address, $email, 0, $conn);
+                        } elseif (password_verify($password, $password_hash)) {
+                            // ===== SUCCESSFUL LOGIN =====
+                            
+                            // Regenerate session ID
+                            session_regenerate_id(true);
+                            
+                            $_SESSION['user_id'] = $id;
+                            $_SESSION['nama'] = $nama;
+                            $_SESSION['login_time'] = time();
+                            $_SESSION['last_activity'] = time();
+                            $_SESSION['user_agent'] = $_SERVER['HTTP_USER_AGENT'];
+                            
+                            // Update last login dengan IP
+                            $update = $conn->prepare("UPDATE users SET last_login = NOW(), last_ip = ? WHERE id = ?");
+                            $update->bind_param("si", $ip_address, $id);
+                            $update->execute();
+                            
+                            // Record successful login
+                            recordLoginAttempt($ip_address, $email, 1, $conn);
+                            
+                            // Regenerate CSRF token
+                            $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+                            
+                            header("Location: dashboard.php");
+                            exit;
+                        } else {
+                            // Generic message
+                            $notif = "Login gagal. Periksa kredensial Anda.";
+                            recordLoginAttempt($ip_address, $email, 0, $conn);
+                        }
+                    } else {
+                        // Generic message
+                        $notif = "Login gagal. Periksa kredensial Anda.";
+                        recordLoginAttempt($ip_address, $email, 0, $conn);
+                    }
+                }
+            }
         }
     }
+    
+    // ===== REDIRECT UNTUK MENCEGAH FORM RESUBMISSION (PRG Pattern) =====
+    if (!empty($notif)) {
+        $_SESSION['login_error'] = $notif;
+        header("Location: login.php");
+        exit;
+    }
+    
+    // Regenerate captcha setelah submit
+    unset($_SESSION['captcha']);
 }
 ?>
 
@@ -80,7 +180,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
       padding: 35px 40px;
       box-shadow: 0 8px 30px rgba(0,0,0,0.25);
       width: 100%;
-      max-width: 700px; /* disamakan dengan modal daftar */
+      max-width: 700px;
       animation: fadeIn 0.8s ease;
     }
 
@@ -142,19 +242,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
     </script>
   <?php endif; ?>
 
-  <form method="POST" action="login.php">
+  <form method="POST" action="login.php" autocomplete="off">
+    <!-- CSRF Token -->
+    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+    
     <div class="form-row">
       <div class="form-group col-md-6">
         <label for="email"><i class="fas fa-envelope text-primary"></i> Email</label>
-        <input type="email" name="email" id="email" class="form-control" placeholder="Masukkan email" required>
+        <input type="email" name="email" id="email" class="form-control" placeholder="Masukkan email" required autocomplete="email" maxlength="255">
       </div>
 
       <div class="form-group col-md-6">
         <label for="password"><i class="fas fa-lock text-primary"></i> Password</label>
         <div class="input-group">
-          <input type="password" name="password" id="password" class="form-control" placeholder="Masukkan password" required>
+          <input type="password" name="password" id="password" class="form-control" placeholder="Masukkan password" required autocomplete="current-password" maxlength="255">
           <div class="input-group-append">
-            <span class="input-group-text" onclick="togglePassword('password', 'toggleIcon')" style="cursor:pointer">
+            <span class="input-group-text" onclick="togglePassword('password', 'toggleIcon')" style="cursor:pointer" tabindex="-1">
               <i class="fas fa-eye" id="toggleIcon"></i>
             </span>
           </div>
@@ -165,13 +268,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
         <label for="captcha_input"><i class="fas fa-shield-alt text-primary"></i> Kode Keamanan</label>
         <div class="d-flex align-items-center mb-2">
           <img src="captcha.php" id="captcha-img" alt="Captcha" style="border-radius: 5px; height: 38px;">
-          <a href="#" onclick="document.getElementById('captcha-img').src = 'captcha.php?' + Date.now(); return false;" class="ml-3">🔄 Muat Ulang</a>
+          <a href="#" onclick="reloadCaptcha(); return false;" class="ml-3">🔄 Muat Ulang</a>
         </div>
-        <input type="text" name="captcha_input" id="captcha_input" class="form-control" placeholder="Masukkan kode di atas" required>
+        <input type="text" name="captcha_input" id="captcha_input" class="form-control" placeholder="Masukkan kode di atas" required autocomplete="off" maxlength="6">
       </div>
 
       <div class="form-group col-md-4 d-flex align-items-end">
-        <button type="submit" class="btn btn-primary btn-block shadow-sm w-100">
+        <button type="submit" class="btn btn-primary btn-block shadow-sm w-100" id="loginBtn">
           <i class="fas fa-sign-in-alt mr-1"></i> Login
         </button>
       </div>
@@ -191,7 +294,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
 
   <hr>
   <div class="text-center text-muted">
-    &copy; <?= date('Y') ?> FixPoint, V. 1.0.5<br>
+    &copy; <?= date('Y') ?> FixPoint, V. 2.0.31.10.2025<br>
     Info Trouble: <strong>M. Wira</strong> - <a href="tel:+6282177856209">0821-7784-6209</a>
   </div>
 </div>
@@ -199,30 +302,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
 <!-- MODAL REGISTER -->
 <div class="modal fade" id="modalRegister" tabindex="-1" role="dialog" aria-labelledby="modalRegisterLabel" aria-hidden="true">
   <div class="modal-dialog modal-lg" role="document">
-    <form method="POST" action="proses_register.php" class="modal-content">
+    <form method="POST" action="proses_register.php" class="modal-content" autocomplete="off">
+      <!-- CSRF Token -->
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+      
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-user-plus mr-2"></i> Daftar Akun Baru</h5>
         <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <div class="form-group col-md-6">
-            <label>NIK</label>
-            <input type="text" name="nik" class="form-control" required>
-          </div>
+        <div class="form-group col-md-6">
+    <label>NIK / NIP Karyawan <small class="text-muted">(Bukan NIK KTP)</small></label>
+    <input type="text"name="nik"class="form-control"requiredmaxlength="30"pattern="[A-Za-z0-9]+"title="NIK/NIP wajib diisi dan hanya boleh berisi huruf dan angka">
+</div>
+
           <div class="form-group col-md-6">
             <label>Nama Lengkap</label>
-            <input type="text" name="nama" class="form-control" required>
+            <input type="text" name="nama" class="form-control" required maxlength="100">
           </div>
           <div class="form-group col-md-6">
             <label>Jabatan</label>
             <select name="jabatan" class="form-control" required>
               <option value="">Pilih Jabatan</option>
               <?php
-              $jabatan = $conn->query("SELECT nama_jabatan FROM jabatan");
+              $jabatan = $conn->query("SELECT nama_jabatan FROM jabatan ORDER BY nama_jabatan");
               while($r = $jabatan->fetch_assoc()):
               ?>
-                <option value="<?= $r['nama_jabatan'] ?>"><?= $r['nama_jabatan'] ?></option>
+                <option value="<?= htmlspecialchars($r['nama_jabatan']) ?>"><?= htmlspecialchars($r['nama_jabatan']) ?></option>
               <?php endwhile; ?>
             </select>
           </div>
@@ -231,34 +338,35 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
             <select name="unit_kerja" class="form-control" required>
               <option value="">Pilih Unit</option>
               <?php
-              $unit = $conn->query("SELECT nama_unit FROM unit_kerja");
+              $unit = $conn->query("SELECT nama_unit FROM unit_kerja ORDER BY nama_unit");
               while($r = $unit->fetch_assoc()):
               ?>
-                <option value="<?= $r['nama_unit'] ?>"><?= $r['nama_unit'] ?></option>
+                <option value="<?= htmlspecialchars($r['nama_unit']) ?>"><?= htmlspecialchars($r['nama_unit']) ?></option>
               <?php endwhile; ?>
             </select>
           </div>
           <div class="form-group col-md-6">
             <label>Email</label>
-            <input type="email" name="email" class="form-control" required>
+            <input type="email" name="email" class="form-control" required maxlength="255">
           </div>
           <div class="form-group col-md-6">
             <label>Password</label>
             <div class="input-group">
-              <input type="password" name="password" id="reg-password" class="form-control" required>
+              <input type="password" name="password" id="reg-password" class="form-control" required minlength="8" maxlength="255">
               <div class="input-group-append">
-                <span class="input-group-text" onclick="togglePassword('reg-password', 'reg-eye')" style="cursor:pointer">
+                <span class="input-group-text" onclick="togglePassword('reg-password', 'reg-eye')" style="cursor:pointer" tabindex="-1">
                   <i class="fas fa-eye" id="reg-eye"></i>
                 </span>
               </div>
             </div>
+            <small class="form-text text-muted">Minimal 8 karakter</small>
           </div>
           <div class="form-group col-md-6">
             <label>Konfirmasi Password</label>
             <div class="input-group">
-              <input type="password" name="konfirmasi_password" id="reg-confirm" class="form-control" required>
+              <input type="password" name="konfirmasi_password" id="reg-confirm" class="form-control" required minlength="8" maxlength="255">
               <div class="input-group-append">
-                <span class="input-group-text" onclick="togglePassword('reg-confirm', 'reg-confirm-eye')" style="cursor:pointer">
+                <span class="input-group-text" onclick="togglePassword('reg-confirm', 'reg-confirm-eye')" style="cursor:pointer" tabindex="-1">
                   <i class="fas fa-eye" id="reg-confirm-eye"></i>
                 </span>
               </div>
@@ -269,10 +377,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
             <select name="atasan_id" class="form-control">
               <option value="">Pilih Atasan</option>
               <?php
-              $atasan = $conn->query("SELECT id, nama FROM users ORDER BY nama");
+              $atasan = $conn->query("SELECT id, nama FROM users WHERE status = 'active' ORDER BY nama");
               while($r = $atasan->fetch_assoc()):
               ?>
-                <option value="<?= $r['id'] ?>"><?= $r['nama'] ?></option>
+                <option value="<?= htmlspecialchars($r['id']) ?>"><?= htmlspecialchars($r['nama']) ?></option>
               <?php endwhile; ?>
             </select>
           </div>
@@ -290,7 +398,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
 <!-- MODAL LUPA PASSWORD -->
 <div class="modal fade" id="modalForgot" tabindex="-1" role="dialog" aria-labelledby="modalForgotLabel" aria-hidden="true">
   <div class="modal-dialog" role="document">
-    <form method="POST" action="proses_forgot.php" class="modal-content">
+    <form method="POST" action="proses_forgot.php" class="modal-content" autocomplete="off">
+      <!-- CSRF Token -->
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_token']) ?>">
+      
       <div class="modal-header">
         <h5 class="modal-title"><i class="fas fa-key mr-2"></i> Lupa Password</h5>
         <button type="button" class="close" data-dismiss="modal"><span>&times;</span></button>
@@ -299,7 +410,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
         <p>Masukkan email Anda untuk mengatur ulang password.</p>
         <div class="form-group mt-3">
           <label><i class="fas fa-envelope text-primary"></i> Email</label>
-          <input type="email" name="email" class="form-control" placeholder="Masukkan email Anda" required>
+          <input type="email" name="email" class="form-control" placeholder="Masukkan email Anda" required maxlength="255">
         </div>
       </div>
       <div class="modal-footer">
@@ -324,6 +435,26 @@ function togglePassword(inputId, iconId) {
     icon.classList.replace("fa-eye-slash", "fa-eye");
   }
 }
+
+function reloadCaptcha() {
+  document.getElementById('captcha-img').src = 'captcha.php?' + Date.now();
+}
+
+// Prevent multiple form submissions
+document.querySelector('form').addEventListener('submit', function() {
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i> Mohon tunggu...';
+});
+
+// Clear password fields on page load
+window.addEventListener('load', function() {
+  document.getElementById('password').value = '';
+  if(document.getElementById('reg-password')) {
+    document.getElementById('reg-password').value = '';
+    document.getElementById('reg-confirm').value = '';
+  }
+});
 </script>
 
 </body>

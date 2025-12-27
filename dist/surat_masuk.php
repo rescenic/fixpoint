@@ -180,9 +180,18 @@ $data_sifat = mysqli_query($conn, "
 
             <!-- FORM -->
             <div class="card">
-  <div class="card-header">
-    <h4>Manajemen Surat Masuk</h4>
-  </div>
+                <div class="card-header d-flex align-items-center justify-content-between">
+                <h4 class="mb-0">
+                  Manajemen Surat Masuk
+                  <i class="fas fa-question-circle text-danger ml-2"
+                     style="cursor:pointer;"
+                     data-toggle="modal"
+                     data-target="#modalBantuanSurat"
+                     title="Panduan Penggunaan">
+                  </i>
+                </h4>
+              </div>
+
   <div class="card-body">
 
     <!-- Tabs -->
@@ -254,7 +263,7 @@ $data_sifat = mysqli_query($conn, "
               <option value="Tidak Perlu Dibalas">Tidak Perlu Dibalas</option>
             </select>
           </div>
-          <div class="form-group"><label>Disposisi Ke</label>
+          <div class="form-group"><label>Diteruskan Ke</label>
             <select name="disposisi_ke" class="form-control">
               <option value="">-- Pilih User --</option>
               <?php while ($u = mysqli_fetch_assoc($data_user)) : ?>
@@ -290,7 +299,7 @@ $data_sifat = mysqli_query($conn, "
 <th>Tgl Balas</th>
 <th>Balasan</th>
 
-          <th>Disposisi Ke</th>
+          <th>Diteruskan Ke</th>
           <th>Catatan</th>
           <th>File</th>
           <th>Input Oleh</th>
@@ -439,6 +448,76 @@ $data_sifat = mysqli_query($conn, "
       </div>
     </div>
   </div>
+
+
+<!-- MODAL BANTUAN SURAT MASUK -->
+<div class="modal fade" id="modalBantuanSurat" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-info-circle"></i> Panduan Penggunaan – Surat Masuk
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <ol>
+          <li>
+            <b>Input Surat Masuk</b><br>
+            Isi data surat sesuai dokumen fisik / file yang diterima, meliputi:
+            nomor surat, tanggal, pengirim, perihal, dan lampiran.
+          </li>
+          <hr>
+
+          <li>
+            <b>Diteruskan Ke (Disposisi)</b><br>
+            Pilih nama pejabat / unit yang akan menerima disposisi surat.
+            Surat akan otomatis muncul di menu <b>Disposisi Surat</b> milik penerima.
+          </li>
+          <hr>
+
+          <li>
+            <b>Status Balasan</b><br>
+            Gunakan untuk menandai apakah surat memerlukan balasan atau tidak.
+            Jika memerlukan balasan, sistem akan memantau tindak lanjutnya.
+          </li>
+          <hr>
+
+          <li>
+            <b>Tab Data Surat Masuk</b><br>
+            Digunakan untuk melihat seluruh surat yang telah diinput,
+            termasuk status balasan dan file surat.
+          </li>
+          <hr>
+
+          <li>
+            <b>Tab Laporan</b><br>
+            Menampilkan rekap surat masuk berdasarkan periode dan sifat surat.
+            Laporan dapat dicetak ke PDF.
+          </li>
+        </ol>
+
+        <div class="alert alert-info mt-3">
+          <i class="fas fa-lightbulb"></i>
+          <b>Tips:</b> Pastikan file surat diunggah dalam format PDF
+          agar dapat dibaca dan diarsipkan dengan baik.
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">
+          Tutup
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 
     <script src="assets/modules/jquery.min.js"></script>
   <script src="assets/modules/popper.js"></script>

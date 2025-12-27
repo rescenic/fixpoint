@@ -160,23 +160,39 @@ $data_izin = $stmt_data->get_result();
       <?php if ($data_izin && $data_izin->num_rows > 0): ?>
       <?php $no = $offset + 1; while ($izin = $data_izin->fetch_assoc()): ?>
       <?php
-        $lama = "-";
-        $class_lama = "";
+      
+      
+   $lama = "-";
+$class_lama = "";
 
-        if (!empty($izin['jam_keluar']) && !empty($izin['jam_kembali_real'])) {
-            $waktu_keluar = strtotime($izin['tanggal'] . ' ' . $izin['jam_keluar']);
-            $waktu_kembali = preg_match('/\d{4}-\d{2}-\d{2}/', $izin['jam_kembali_real'])
-                ? strtotime($izin['jam_kembali_real'])
-                : strtotime($izin['tanggal'] . ' ' . $izin['jam_kembali_real']);
+if (!empty($izin['jam_keluar']) && !empty($izin['jam_kembali_real'])) {
 
-            if ($waktu_kembali > $waktu_keluar) {
-                $selisih = $waktu_kembali - $waktu_keluar;
-                $jam = floor($selisih / 3600);
-                $menit = floor(($selisih % 3600) / 60);
-                $lama = sprintf("%02d jam %02d menit", $jam, $menit);
-                if ($selisih > 3600) $class_lama = "text-merah";
-            }
+    // WAKTU MULAI = tanggal + jam keluar
+    $start = strtotime($izin['tanggal'].' '.$izin['jam_keluar']);
+
+    // WAKTU SELESAI = jam kembali real (bisa TIME atau DATETIME)
+    if (preg_match('/\d{4}-\d{2}-\d{2}/', $izin['jam_kembali_real'])) {
+        $finish = strtotime($izin['jam_kembali_real']);
+    } else {
+        $finish = strtotime($izin['tanggal'].' '.$izin['jam_kembali_real']);
+    }
+
+    if ($finish > $start) {
+        $selisih = $finish - $start;
+
+        $jam   = floor($selisih / 3600);
+        $menit = floor(($selisih % 3600) / 60);
+
+        $lama = sprintf("%02d jam %02d menit", $jam, $menit);
+
+        // Tandai merah jika lebih dari 1 jam (opsional, logika lama kamu tetap dipakai)
+        if ($selisih > 3600) {
+            $class_lama = "text-merah";
         }
+    }
+}
+
+
       ?>
       <tr>
         <td class="text-center"><?= $no++ ?></td>

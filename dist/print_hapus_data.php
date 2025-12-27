@@ -105,16 +105,16 @@ table.kop { width:100%; border-bottom:2px solid #000; margin-bottom:8px; }
 </td>
 
 <td>
-    '.$perusahaan['kota'].', '.$tanggal.'<br><br><br><br><br>
+    '.$perusahaan['kota'].', '.$tanggal.'<br> Petugas IT - SIMRS<br><br><br><br>
     <b><u>'.$validator_nama.'</u></b><br>
     NIK: '.$validator_nik.'<br>
-    Petugas IT - SIMRS
+   
 </td>
 </tr>
 </table>
 
 <div class="footer">
-Dokumen ini dicetak otomatis melalui SIMRS — '.date('d/m/Y H:i').'
+Dokumen ini dicetak otomatis melalui aplikasi FixPoint 
 </div>
 ';
 

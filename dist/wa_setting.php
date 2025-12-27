@@ -16,7 +16,7 @@ if (mysqli_num_rows($result) == 0) {
     exit;
 }
 
-// Ambil data jika sedang edit
+
 $edit_setting = null;
 if (isset($_GET['edit_id'])) {
     $edit_id = intval($_GET['edit_id']);
@@ -34,7 +34,6 @@ if (isset($_GET['hapus_id'])) {
     exit;
 }
 
-// Simpan atau update
 if (isset($_POST['simpan'])) {
     $id = intval($_POST['id'] ?? 0);
     $nama = mysqli_real_escape_string($conn, $_POST['nama']);

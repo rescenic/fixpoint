@@ -18,18 +18,33 @@ function tgl_indo($tanggal) {
 }
 
 // === Fungsi hitung lama izin (durasi) ===
+
 function hitungLama($tanggal, $jam_keluar, $jam_kembali_real) {
+
     if (empty($jam_keluar) || empty($jam_kembali_real)) {
         return "-";
     }
-    $mulai = strtotime("$tanggal $jam_keluar");
-    $selesai = strtotime($jam_kembali_real);
-    if ($selesai < $mulai) return "-";
+
+    // waktu mulai = tanggal + jam keluar
+    $mulai = strtotime($tanggal . ' ' . $jam_keluar);
+
+    // jam kembali bisa berupa jam saja atau datetime
+    if (preg_match('/\d{4}-\d{2}-\d{2}/', $jam_kembali_real)) {
+        $selesai = strtotime($jam_kembali_real);
+    } else {
+        $selesai = strtotime($tanggal . ' ' . $jam_kembali_real);
+    }
+
+    if ($selesai <= $mulai) return "-";
+
     $selisih = $selesai - $mulai;
     $jam = floor($selisih / 3600);
     $menit = floor(($selisih % 3600) / 60);
-    return ($jam > 0) ? "$jam jam $menit menit" : "$menit menit";
+
+    return sprintf("%02d jam %02d menit", $jam, $menit);
 }
+
+
 
 // === Ambil user login ===
 $nama_user = $_SESSION['nama'] ?? 'Petugas';
@@ -126,7 +141,12 @@ $html .= '
 $no = 1;
 if (mysqli_num_rows($query) > 0) {
     while ($row = mysqli_fetch_assoc($query)) {
-        $lama = hitungLama($row['tanggal'], $row['jam_keluar'], $row['jam_kembali_real']);
+    $lama = hitungLama(
+    $row['tanggal'],
+    $row['jam_keluar'],
+    $row['jam_kembali_real']
+);
+
         $html .= "
         <tr>
           <td class='center'>{$no}</td>

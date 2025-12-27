@@ -25,9 +25,25 @@ if (!$result || $result->num_rows == 0) {
     exit;
 }
 
-// Ambil semua user
-$users_result = $conn->query("SELECT * FROM users ORDER BY id ASC");
-$users = $users_result->fetch_all(MYSQLI_ASSOC);
+// ==========================
+// PAGINATION
+// ==========================
+$limit = 10;
+$page  = isset($_GET['page']) && is_numeric($_GET['page']) ? intval($_GET['page']) : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $limit;
+
+// Hitung total data
+$totalResult = $conn->query("SELECT COUNT(*) AS total FROM users");
+$totalData   = $totalResult->fetch_assoc()['total'];
+$totalPages  = ceil($totalData / $limit);
+
+// Ambil data user sesuai halaman
+$stmtUsers = $conn->prepare("SELECT * FROM users ORDER BY id ASC LIMIT ? OFFSET ?");
+$stmtUsers->bind_param("ii", $limit, $offset);
+$stmtUsers->execute();
+$users = $stmtUsers->get_result()->fetch_all(MYSQLI_ASSOC);
+
 ?>
 
 <!DOCTYPE html>
@@ -103,7 +119,8 @@ $users = $users_result->fetch_all(MYSQLI_ASSOC);
 </thead>
 <tbody>
 <?php
-$no = 1;
+$no = $offset + 1;
+
 foreach($users as $user){
     $userId = $user['id'];
 
@@ -190,6 +207,52 @@ foreach($users as $user){
 </table>
 </div>
 </div>
+
+<?php if ($totalPages > 1): ?>
+<nav>
+  <ul class="pagination justify-content-center mt-3">
+
+    <!-- Previous -->
+    <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
+      <a class="page-link" href="?page=<?= $page-1 ?>">&laquo;</a>
+    </li>
+
+    <?php
+    $startPage = max(1, $page - 2);
+    $endPage   = min($totalPages, $page + 2);
+
+    if ($startPage > 1) {
+        echo '<li class="page-item"><a class="page-link" href="?page=1">1</a></li>';
+        if ($startPage > 2) {
+            echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+    }
+
+    for ($i = $startPage; $i <= $endPage; $i++):
+    ?>
+      <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
+        <a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
+      </li>
+    <?php endfor; ?>
+
+    <?php
+    if ($endPage < $totalPages) {
+        if ($endPage < $totalPages - 1) {
+            echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+        }
+        echo '<li class="page-item"><a class="page-link" href="?page='.$totalPages.'">'.$totalPages.'</a></li>';
+    }
+    ?>
+
+    <!-- Next -->
+    <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
+      <a class="page-link" href="?page=<?= $page+1 ?>">&raquo;</a>
+    </li>
+
+  </ul>
+</nav>
+<?php endif; ?>
+
 
 </div>
 </section>

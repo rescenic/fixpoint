@@ -12,7 +12,7 @@ if ($user_id == 0) {
 
 $current_file = basename(__FILE__);
 
-// Cek akses menu
+
 $query = "SELECT 1 FROM akses_menu 
           JOIN menu ON akses_menu.menu_id = menu.id 
           WHERE akses_menu.user_id = ? AND menu.file_menu = ?";
@@ -32,7 +32,7 @@ $qUser->execute();
 $resUser = $qUser->get_result();
 $user = $resUser->fetch_assoc();
 
-// --- Proses ACC ---
+
 if (isset($_POST['status_atasan'], $_POST['id_izin'])) {
     $id_izin = intval($_POST['id_izin']);
     $status_atasan = $_POST['status_atasan'];
@@ -44,10 +44,13 @@ if (isset($_POST['status_atasan'], $_POST['id_izin'])) {
         exit;
     }
 
-    $qIzinDetail = $conn->prepare("SELECT u.nama, u.no_hp, izin.keperluan, izin.jam_keluar, izin.jam_kembali 
-                                   FROM izin_keluar izin
-                                   JOIN users u ON izin.user_id = u.id
-                                   WHERE izin.id = ?");
+$qIzinDetail = $conn->prepare("
+    SELECT u.nama, u.no_hp, izin.tanggal, izin.keperluan, izin.jam_keluar, izin.jam_kembali 
+    FROM izin_keluar izin
+    JOIN users u ON izin.user_id = u.id
+    WHERE izin.id = ?
+");
+
     $qIzinDetail->bind_param("i", $id_izin);
     $qIzinDetail->execute();
     $resIzinDetail = $qIzinDetail->get_result();
@@ -65,12 +68,14 @@ if (isset($_POST['status_atasan'], $_POST['id_izin'])) {
     if ($qUpdate->execute()) {
         $_SESSION['flash_message'] = "✅ Status ACC atasan berhasil diperbarui.";
         if (!empty($rowIzin['no_hp'])) {
-            $pesanWA = "📝 *JAWABAN IZIN KELUAR*\n";
-            $pesanWA .= "Status Atasan: " . ucfirst($status_atasan) . "\n";
-            $pesanWA .= "Jam Keluar: " . $rowIzin['jam_keluar'] . " WIB\n";
-            $pesanWA .= "Jam Kembali (Estimasi): " . ($rowIzin['jam_kembali'] ?: '-') . " WIB\n";
-            $pesanWA .= "Keperluan: " . $rowIzin['keperluan'] . "\n";
-            $pesanWA .= "Atasan: " . $user['nama'];
+          $pesanWA  = "📝 *JAWABAN IZIN KELUAR*\n";
+          $pesanWA .= "Tanggal Izin : " . date('d-m-Y', strtotime($rowIzin['tanggal'])) . "\n";
+          $pesanWA .= "Status Atasan: " . ucfirst($status_atasan) . "\n";
+          $pesanWA .= "Jam Keluar   : " . $rowIzin['jam_keluar'] . " WIB\n";
+          $pesanWA .= "Jam Kembali  : " . ($rowIzin['jam_kembali'] ?: '-') . " WIB\n";
+          $pesanWA .= "Keperluan    : " . $rowIzin['keperluan'] . "\n";
+          $pesanWA .= "Atasan       : " . $user['nama'];
+
             sendWA($rowIzin['no_hp'], $pesanWA);
         }
     } else {
@@ -80,7 +85,7 @@ if (isset($_POST['status_atasan'], $_POST['id_izin'])) {
     exit;
 }
 
-// --- Filter tanggal + Pagination ---
+
 $tgl_awal  = $_GET['tgl_awal']  ?? date('Y-m-d');
 $tgl_akhir = $_GET['tgl_akhir'] ?? date('Y-m-d');
 

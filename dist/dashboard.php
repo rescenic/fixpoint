@@ -49,6 +49,34 @@ if ($resultSW) {
     while($row = $resultSW->fetch_assoc()){ $dataTiketSoftware[] = $row; }
 }
 
+// =====================
+// HITUNG DOKUMEN TTE SAYA
+// =====================
+$user_id = $_SESSION['user_id'];
+
+$sqlTteSaya = "
+    SELECT COUNT(id) AS total_tte
+    FROM tte_document_log
+    WHERE user_id = ?
+";
+
+$stmtTte = $conn->prepare($sqlTteSaya);
+if (!$stmtTte) {
+    die("Prepare error TTE: " . $conn->error);
+}
+
+$stmtTte->bind_param("i", $user_id);
+$stmtTte->execute();
+
+$resultTte = $stmtTte->get_result();
+$totalTteSaya = 0;
+
+if ($resultTte && ($row = $resultTte->fetch_assoc())) {
+    $totalTteSaya = (int)$row['total_tte'];
+}
+
+
+
 // Proses update logbook
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_logbook'])) {
     $id     = intval($_POST['id']);
@@ -221,6 +249,23 @@ if ($stmtLB) {
       </div>
     </div>
   </div>
+
+   <div class="col-lg-3 col-md-6 col-sm-6 col-12">
+  <div class="card card-statistic-1" data-toggle="modal" data-target="#modalTteSaya" style="cursor:pointer;">
+    <div class="card-icon bg-primary">
+      <i class="fa fa-qrcode"></i>
+    </div>
+    <div class="card-wrap">
+      <div class="card-header">
+        <h4>Dokumen TTE Saya</h4>
+      </div>
+      <div class="card-body">
+        <?= $totalTteSaya ?>
+      </div>
+    </div>
+  </div>
+</div>
+
 
 </div>
 
@@ -486,6 +531,100 @@ if ($stmtLB) {
     </div>
   </div>
 </div>
+
+
+<!-- Modal Dokumen TTE Saya -->
+<div class="modal fade" id="modalTteSaya" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-xxl" role="document">
+    <div class="modal-content">
+
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="fa fa-qrcode"></i> Dokumen TTE Saya
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+      </div>
+
+      <div class="modal-body table-responsive">
+        <table class="table table-bordered table-sm">
+          <thead class="thead-light">
+            <tr>
+              <th style="width:50px;">No</th>
+              <th>Nama Dokumen</th>
+              <th>Waktu TTE</th>
+              <th>Token TTE</th>
+              <th>Hash Dokumen</th>
+              <th>IP Address</th>
+              <th>User Agent</th>
+              <th>Aksi</th>
+            </tr>
+          </thead>
+          <tbody>
+          <?php
+          $user_id = $_SESSION['user_id'];
+
+          $queryTte = mysqli_query(
+              $conn,
+              "SELECT 
+                  document_name,
+                  signed_at,
+                  tte_token,
+                  document_hash,
+                  ip_address,
+                  user_agent
+               FROM tte_document_log
+               WHERE user_id = '$user_id'
+               ORDER BY signed_at DESC"
+          );
+
+          if ($queryTte && mysqli_num_rows($queryTte) > 0):
+              $no = 1;
+              while ($row = mysqli_fetch_assoc($queryTte)):
+          ?>
+            <tr>
+              <td class="text-center"><?= $no++; ?></td>
+              <td><?= htmlspecialchars($row['document_name']); ?></td>
+              <td><?= date('d-m-Y H:i', strtotime($row['signed_at'])); ?></td>
+              <td>
+                <code><?= htmlspecialchars($row['tte_token']); ?></code>
+              </td>
+              <td>
+                <small><code><?= htmlspecialchars($row['document_hash']); ?></code></small>
+              </td>
+              <td class="text-center">
+                <?= !empty($row['ip_address']) ? htmlspecialchars($row['ip_address']) : '-'; ?>
+              </td>
+              <td>
+                <small><?= !empty($row['user_agent']) ? htmlspecialchars($row['user_agent']) : '-'; ?></small>
+              </td>
+              <td class="text-center">
+                <a href="verify_tte.php?token=<?= urlencode($row['tte_token']); ?>"
+                   target="_blank"
+                   class="btn btn-sm btn-success">
+                  <i class="fa fa-check"></i> Cek TTE
+                </a>
+              </td>
+            </tr>
+          <?php
+              endwhile;
+          else:
+          ?>
+            <tr>
+              <td colspan="8" class="text-center">Belum ada dokumen TTE</td>
+            </tr>
+          <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
 
 
 

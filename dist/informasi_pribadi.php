@@ -30,7 +30,7 @@ $fields = [
     'kota' => ['label' => 'Kota', 'icon' => 'bi-building'],
     'no_ktp' => ['label' => 'No. KTP', 'icon' => 'bi-card-text'],
     'hubungan_keluarga' => ['label' => 'Hubungan Keluarga', 'icon' => 'bi-people-fill'],
-    'no_hp' => ['label' => 'No. HP', 'icon' => 'bi-telephone']
+    'no_hp' => ['label' => 'No. HP Keluarga', 'icon' => 'bi-telephone']
 ];
 
 // Ambil data field

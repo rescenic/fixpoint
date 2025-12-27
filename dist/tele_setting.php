@@ -77,9 +77,19 @@ $all_settings = mysqli_query($conn, "SELECT * FROM setting ORDER BY id DESC");
 
     <div class="main-content">
       <section class="section">
-        <div class="section-header">
-          <h1>Pengaturan Telegram</h1>
-        </div>
+       <div class="section-header d-flex align-items-center">
+  <h1 class="mb-0">Pengaturan Telegram</h1>
+
+  <!-- Ikon tanda tanya merah -->
+  <button type="button"
+          class="btn btn-link text-danger ml-2 p-0"
+          data-toggle="modal"
+          data-target="#modalHelpTelegram"
+          title="Panduan Pengisian">
+    <i class="fas fa-question-circle"></i>
+  </button>
+</div>
+
 
         <div class="section-body">
           <div class="card">
@@ -167,6 +177,57 @@ $all_settings = mysqli_query($conn, "SELECT * FROM setting ORDER BY id DESC");
     </div>
   </div>
 </div>
+
+
+<!-- MODAL PANDUAN TELEGRAM SETTING -->
+<div class="modal fade" id="modalHelpTelegram" tabindex="-1" role="dialog" aria-labelledby="modalHelpTelegramLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered" role="document">
+    <div class="modal-content">
+
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="modalHelpTelegramLabel">
+          <i class="fas fa-info-circle"></i> Panduan Pengisian Telegram Setting
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">
+          <span>&times;</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+
+        <h6>📌 1. Telegram Bot Token</h6>
+        <ul>
+          <li>Isi <b>Nama</b> dengan: <code>telegram_bot_token</code></li>
+          <li>Isi <b>Nilai</b> dengan token bot dari <b>@BotFather</b></li>
+          <li>Contoh nilai: <code>123456:ABC-DEF1234</code></li>
+        </ul>
+
+        <hr>
+
+        <h6>📌 2. Chat ID Grup IT</h6>
+        <ul>
+          <li>Isi <b>Nama</b> dengan: <code>telegram_chat_id</code></li>
+          <li>Isi <b>Nilai</b> dengan Chat ID grup Telegram IT</li>
+          <li>Chat ID grup selalu diawali tanda <b>minus (-100...)</b></li>
+        </ul>
+
+        <hr>
+
+        <h6>📌 3. Chat ID Grup HRD</h6>
+        <ul>
+          <li>Isi <b>Nama</b> dengan: <code>telegram_chat_id_hrd</code></li>
+          <li>Isi <b>Nilai</b> dengan Chat ID grup Telegram HRD</li>
+          <li>Bot harus sudah ditambahkan ke grup HRD</li>
+        </ul>
+
+        <hr>
+
+        <h6>📌 4. Catatan Penting</h6>
+        <ul>
+          <li>Nama setting harus <b>persis</b> (tidak boleh typo)</li>
+          <li>Bot Telegram harus memiliki izin kirim pesan</li>
+          <li>Satu bot bisa digunakan untuk banyak grup</li>
+        </ul>
 
 <!-- JS Scripts -->
 <script src="assets/modules/jquery.min.js"></script>
