@@ -294,7 +294,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
 
   <hr>
   <div class="text-center text-muted">
-    &copy; <?= date('Y') ?> FixPoint, V. 2.0.31.10.2025<br>
+    &copy; <?= date('Y') ?> FixPoint, V. 2. - .29.12.2025<br>
     Info Trouble: <strong>M. Wira</strong> - <a href="tel:+6282177856209">0821-7784-6209</a>
   </div>
 </div>

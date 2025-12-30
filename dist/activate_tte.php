@@ -329,5 +329,3 @@ document.addEventListener('DOMContentLoaded', function() {
 
 </body>
 </html>
-
-<?php include 'footer.php'; ?>
