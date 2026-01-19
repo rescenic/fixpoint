@@ -124,7 +124,7 @@ $tgl_sampai = isset($_GET['tgl_sampai']) ? $_GET['tgl_sampai'] : '';
                 </form>
 
                 <?php
-                $limit = 6;
+                $limit = 10;
                 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
                 $offset = ($page - 1) * $limit;
                 $whereClauses = [];

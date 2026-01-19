@@ -1,12 +1,12 @@
 <?php
-include 'security.php';
+include 'security.php'; 
 include 'koneksi.php';
 date_default_timezone_set('Asia/Jakarta');
 
 $user_id = $_SESSION['user_id'];
-$current_file = basename(__FILE__);
+$current_file = 'handling_time.php'; // Gunakan file handling_time.php untuk cek akses
 
-// === CEK AKSES MENU ===
+// Cek akses menu
 $query = "SELECT 1 FROM akses_menu 
           JOIN menu ON akses_menu.menu_id = menu.id 
           WHERE akses_menu.user_id = '$user_id' AND menu.file_menu = '$current_file'";
@@ -16,53 +16,42 @@ if (mysqli_num_rows($result) == 0) {
   exit;
 }
 
-// === FILTER & PENCARIAN ===
+// Filter data
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $dari_tanggal = isset($_GET['dari_tanggal']) ? $_GET['dari_tanggal'] : '';
 $sampai_tanggal = isset($_GET['sampai_tanggal']) ? $_GET['sampai_tanggal'] : '';
+$filter_status = isset($_GET['status']) ? $_GET['status'] : '';
 
 if ($dari_tanggal) $dari_tanggal = date('Y-m-d', strtotime($dari_tanggal));
 if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal));
+
+// Pagination
+$limit = 10; // Data per halaman
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$page = max(1, $page);
+$offset = ($page - 1) * $limit;
 ?>
 
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-  <title>FixPoint - Handling Time Software</title>
+  <meta charset="UTF-8">
+  <meta content="width=device-width, initial-scale=1, maximum-scale=1, shrink-to-fit=no" name="viewport">
+  <title>f.i.x.p.o.i.n.t</title>
 
-  <link rel="stylesheet" href="assets/modules/bootstrap/css/bootstrap.min.css" />
-  <link rel="stylesheet" href="assets/modules/fontawesome/css/all.min.css" />
-  <link rel="stylesheet" href="assets/css/style.css" />
-  <link rel="stylesheet" href="assets/css/components.css" />
+  <link rel="stylesheet" href="assets/modules/bootstrap/css/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/modules/fontawesome/css/all.min.css">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <link rel="stylesheet" href="assets/css/components.css">
 
   <style>
-    #notif-toast {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 9999;
-      display: none;
-      min-width: 300px;
-    }
-    .table-responsive-custom {
-      width: 100%;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-    }
-    .table-responsive-custom table {
-      min-width: 1500px;
-      white-space: nowrap;
-    }
-    .btn-sm {
-      padding: 4px 8px !important;
-      font-size: 13px;
-    }
+    .table-responsive-custom { width: 100%; overflow-x: auto; }
+    .table-responsive-custom table { min-width: 1500px; white-space: nowrap; }
+    .pagination { margin-top: 20px; }
+    .pagination .page-link { color: #6777ef; }
+    .pagination .page-item.active .page-link { background-color: #6777ef; border-color: #6777ef; }
   </style>
 </head>
-
 <body>
 <div id="app">
   <div class="main-wrapper main-wrapper-1">
@@ -73,10 +62,9 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
       <section class="section">
         <div class="section-body">
           <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-              <h4><i class="fas fa-clock mr-2"></i> Data Handling Time Tiket - IT Software</h4>
+            <div class="card-header">
+              <h4><i class="fas fa-clock"></i> Data Handling Time Tiket</h4>
             </div>
-
             <div class="card-body">
 
               <!-- Tabs -->
@@ -90,30 +78,54 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
               </ul>
 
               <!-- Filter -->
-              <form method="GET" class="form-inline mb-3">
-                <div class="form-group mr-2">
-                  <label for="dari_tanggal" class="mr-2">Dari</label>
-                  <input type="date" name="dari_tanggal" id="dari_tanggal" class="form-control"
-                         value="<?= htmlspecialchars($_GET['dari_tanggal'] ?? '') ?>">
+              <form method="GET" class="mb-3">
+                <div class="row">
+                  <div class="col-md-2">
+                    <div class="form-group">
+                      <label>Dari Tanggal</label>
+                      <input type="date" name="dari_tanggal" class="form-control" value="<?php echo $dari_tanggal; ?>">
+                    </div>
+                  </div>
+                  <div class="col-md-2">
+                    <div class="form-group">
+                      <label>Sampai Tanggal</label>
+                      <input type="date" name="sampai_tanggal" class="form-control" value="<?php echo $sampai_tanggal; ?>">
+                    </div>
+                  </div>
+                  <div class="col-md-2">
+                    <div class="form-group">
+                      <label>Status</label>
+                      <select name="status" class="form-control">
+                        <option value="">Semua Status</option>
+                        <option value="Menunggu" <?php echo $filter_status == 'Menunggu' ? 'selected' : ''; ?>>Menunggu</option>
+                        <option value="Diproses" <?php echo $filter_status == 'Diproses' ? 'selected' : ''; ?>>Diproses</option>
+                        <option value="Selesai" <?php echo $filter_status == 'Selesai' ? 'selected' : ''; ?>>Selesai</option>
+                        <option value="Tidak Bisa Diperbaiki" <?php echo $filter_status == 'Tidak Bisa Diperbaiki' ? 'selected' : ''; ?>>Tidak Bisa Diperbaiki</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="form-group">
+                      <label>Pencarian</label>
+                      <input type="text" name="keyword" class="form-control" placeholder="NIK / Nama / No Tiket"
+                             value="<?php echo htmlspecialchars($keyword); ?>">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="form-group">
+                      <label>&nbsp;</label>
+                      <div>
+                        <button type="submit" class="btn btn-primary btn-sm mr-1"><i class="fas fa-search"></i> Filter</button>
+                        <a href="handling_time_software.php" class="btn btn-secondary btn-sm mr-1"><i class="fas fa-sync"></i> Reset</a>
+                        <a href="handling_time_software_pdf.php?dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&keyword=<?php echo urlencode($keyword); ?>&status=<?php echo urlencode($filter_status); ?>"
+                           target="_blank" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="form-group mr-2">
-                  <label for="sampai_tanggal" class="mr-2">Sampai</label>
-                  <input type="date" name="sampai_tanggal" id="sampai_tanggal" class="form-control"
-                         value="<?= htmlspecialchars($_GET['sampai_tanggal'] ?? '') ?>">
-                </div>
-                <div class="form-group mr-2">
-                  <input type="text" name="keyword" class="form-control" placeholder="Cari NIK / Nama / No Tiket"
-                         value="<?= htmlspecialchars($keyword) ?>">
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm">Filter</button>
-                <a href="handling_time_software.php" class="btn btn-secondary btn-sm ml-2">Reset</a>
-                <a href="cetak_handling_time_software.php?keyword=<?= urlencode($keyword) ?>&dari_tanggal=<?= $dari_tanggal ?>&sampai_tanggal=<?= $sampai_tanggal ?>"
-                   target="_blank" class="btn btn-danger btn-sm ml-2">
-                   <i class="fas fa-file-pdf"></i> Cetak PDF
-                </a>
               </form>
 
-              <!-- Table -->
+              <!-- Tabel -->
               <div class="table-responsive-custom">
                 <table class="table table-bordered table-sm table-hover">
                   <thead class="thead-dark text-center">
@@ -140,32 +152,48 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                   </thead>
                   <tbody>
                     <?php
-                    if (isset($_SESSION['flash_message'])) {
-                      echo "<div id='notif-toast' class='alert alert-info text-center'>{$_SESSION['flash_message']}</div>";
-                      unset($_SESSION['flash_message']);
+                    // Query untuk hitung total data
+                    $query_count = "SELECT COUNT(*) as total FROM tiket_it_software WHERE 1=1";
+                    
+                    if (!empty($keyword)) {
+                      $kw = mysqli_real_escape_string($conn, $keyword);
+                      $query_count .= " AND (nik LIKE '%$kw%' OR nama LIKE '%$kw%' OR nomor_tiket LIKE '%$kw%')";
                     }
-
-                    $no = 1;
+                    if (!empty($dari_tanggal) && !empty($sampai_tanggal)) {
+                      $query_count .= " AND DATE(tanggal_input) BETWEEN '$dari_tanggal' AND '$sampai_tanggal'";
+                    }
+                    if (!empty($filter_status)) {
+                      $status_escaped = mysqli_real_escape_string($conn, $filter_status);
+                      $query_count .= " AND status = '$status_escaped'";
+                    }
+                    
+                    $result_count = mysqli_query($conn, $query_count);
+                    $row_count = mysqli_fetch_assoc($result_count);
+                    $total_data = $row_count['total'];
+                    $total_pages = ceil($total_data / $limit);
+                    
+                    // Query untuk ambil data dengan pagination
                     $query = "SELECT * FROM tiket_it_software WHERE 1=1";
 
                     if (!empty($keyword)) {
                       $kw = mysqli_real_escape_string($conn, $keyword);
                       $query .= " AND (nik LIKE '%$kw%' OR nama LIKE '%$kw%' OR nomor_tiket LIKE '%$kw%')";
                     }
-
                     if (!empty($dari_tanggal) && !empty($sampai_tanggal)) {
                       $query .= " AND DATE(tanggal_input) BETWEEN '$dari_tanggal' AND '$sampai_tanggal'";
                     }
+                    if (!empty($filter_status)) {
+                      $status_escaped = mysqli_real_escape_string($conn, $filter_status);
+                      $query .= " AND status = '$status_escaped'";
+                    }
 
-                    $query .= " ORDER BY tanggal_input DESC";
+                    $query .= " ORDER BY tanggal_input DESC LIMIT $limit OFFSET $offset";
                     $result = mysqli_query($conn, $query);
 
-                    // Simpan modal terpisah
-                    $modals = "";
-
                     if (mysqli_num_rows($result) > 0) {
+                      $no = $offset + 1;
                       while ($row = mysqli_fetch_assoc($result)) {
-                        $id_modal = 'kendalaModal' . $row['id'];
+                        $kendala = htmlspecialchars($row['kendala']);
                         echo "<tr>";
                         echo "<td class='text-center'>{$no}</td>";
                         echo "<td>{$row['nomor_tiket']}</td>";
@@ -175,8 +203,9 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                         echo "<td>{$row['unit_kerja']}</td>";
                         echo "<td>{$row['kategori']}</td>";
 
+                        // Tombol Lihat
                         echo "<td class='text-center'>
-                                <button type='button' class='btn btn-info btn-sm' data-toggle='modal' data-target='#{$id_modal}'>
+                                <button type='button' class='btn btn-info btn-sm btn-lihat' data-kendala='{$kendala}' title='Lihat Kendala'>
                                   <i class='fas fa-eye'></i>
                                 </button>
                               </td>";
@@ -201,22 +230,6 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                         echo "<td>" . hitungDurasi($row['tanggal_input'], $row['waktu_selesai']) . "</td>";
                         echo "<td>" . hitungDurasi($row['tanggal_input'], $row['waktu_validasi']) . "</td>";
                         echo "</tr>";
-
-                        // Simpan modal di luar main-wrapper
-                        $modals .= "
-                        <div class='modal fade' id='{$id_modal}' tabindex='-1' role='dialog' aria-hidden='true'>
-                          <div class='modal-dialog modal-lg' role='document'>
-                            <div class='modal-content'>
-                              <div class='modal-header bg-info text-white'>
-                                <h5 class='modal-title'><i class='fas fa-eye'></i> Detail Kendala</h5>
-                                <button type='button' class='close text-white' data-dismiss='modal'><span>&times;</span></button>
-                              </div>
-                              <div class='modal-body'>
-                                <p>" . nl2br(htmlspecialchars($row['kendala'])) . "</p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>";
                         $no++;
                       }
                     } else {
@@ -226,6 +239,7 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                     function formatTanggal($tanggal) {
                       return $tanggal ? date('d-m-Y H:i', strtotime($tanggal)) : '-';
                     }
+
                     function hitungDurasi($mulai, $selesai) {
                       if (!$mulai || !$selesai) return '-';
                       $start = new DateTime($mulai);
@@ -240,6 +254,61 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                 </table>
               </div>
 
+              <!-- Pagination -->
+              <?php if ($total_pages > 1): ?>
+              <nav aria-label="Navigasi halaman">
+                <ul class="pagination justify-content-center">
+                  <!-- Tombol Previous -->
+                  <li class="page-item <?php echo $page <= 1 ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?page=<?php echo $page - 1; ?>&keyword=<?php echo urlencode($keyword); ?>&dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&status=<?php echo urlencode($filter_status); ?>">
+                      <i class="fas fa-chevron-left"></i>
+                    </a>
+                  </li>
+
+                  <?php
+                  // Tampilkan nomor halaman
+                  $start_page = max(1, $page - 2);
+                  $end_page = min($total_pages, $page + 2);
+
+                  if ($start_page > 1) {
+                    echo '<li class="page-item"><a class="page-link" href="?page=1&keyword=' . urlencode($keyword) . '&dari_tanggal=' . $dari_tanggal . '&sampai_tanggal=' . $sampai_tanggal . '&status=' . urlencode($filter_status) . '">1</a></li>';
+                    if ($start_page > 2) {
+                      echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                  }
+
+                  for ($i = $start_page; $i <= $end_page; $i++) {
+                    $active = $i == $page ? 'active' : '';
+                    echo '<li class="page-item ' . $active . '">
+                            <a class="page-link" href="?page=' . $i . '&keyword=' . urlencode($keyword) . '&dari_tanggal=' . $dari_tanggal . '&sampai_tanggal=' . $sampai_tanggal . '&status=' . urlencode($filter_status) . '">' . $i . '</a>
+                          </li>';
+                  }
+
+                  if ($end_page < $total_pages) {
+                    if ($end_page < $total_pages - 1) {
+                      echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    echo '<li class="page-item"><a class="page-link" href="?page=' . $total_pages . '&keyword=' . urlencode($keyword) . '&dari_tanggal=' . $dari_tanggal . '&sampai_tanggal=' . $sampai_tanggal . '&status=' . urlencode($filter_status) . '">' . $total_pages . '</a></li>';
+                  }
+                  ?>
+
+                  <!-- Tombol Next -->
+                  <li class="page-item <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?page=<?php echo $page + 1; ?>&keyword=<?php echo urlencode($keyword); ?>&dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&status=<?php echo urlencode($filter_status); ?>">
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                  </li>
+                </ul>
+              </nav>
+              
+              <!-- Info Total Data -->
+              <div class="text-center">
+                <small class="text-muted">
+                  Menampilkan <?php echo min($offset + 1, $total_data); ?> - <?php echo min($offset + $limit, $total_data); ?> dari <?php echo $total_data; ?> data
+                </small>
+              </div>
+              <?php endif; ?>
+
             </div>
           </div>
         </div>
@@ -248,10 +317,23 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
   </div>
 </div>
 
-<!-- MODAL DITEMPATKAN DI SINI (di luar main-wrapper) -->
-<?= $modals ?>
+<!-- Modal Kendala -->
+<div class="modal fade" id="modalKendala" tabindex="-1" role="dialog" aria-labelledby="modalKendalaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg" role="document">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title"><i class="fas fa-eye"></i> Detail Kendala</h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p id="isiKendala" class="mb-0"></p>
+      </div>
+    </div>
+  </div>
+</div>
 
-<!-- JS -->
 <script src="assets/modules/jquery.min.js"></script>
 <script src="assets/modules/popper.js"></script>
 <script src="assets/modules/bootstrap/js/bootstrap.min.js"></script>
@@ -262,18 +344,21 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
 <script src="assets/js/custom.js"></script>
 
 <script>
-  $(function() {
-    var toast = $('#notif-toast');
-    if (toast.length) {
-      toast.fadeIn(300).delay(2000).fadeOut(500);
-    }
-
-    // Perbaiki modal backdrop bug
-    $('.modal').on('hidden.bs.modal', function () {
-      $('body').removeClass('modal-open');
-      $('.modal-backdrop').remove();
-    });
+$(document).ready(function() {
+  // Klik tombol lihat
+  $(document).on('click', '.btn-lihat', function() {
+    let kendala = $(this).data('kendala');
+    $('#isiKendala').text(kendala || 'Tidak ada keterangan.');
+    $('#modalKendala').modal('show');
   });
+
+  // Pastikan modal bisa dibuka berulang kali
+  $('#modalKendala').on('hidden.bs.modal', function () {
+    $('body').removeClass('modal-open');
+    $('.modal-backdrop').remove();
+  });
+});
 </script>
+
 </body>
 </html>

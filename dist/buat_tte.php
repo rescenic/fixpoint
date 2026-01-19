@@ -139,6 +139,22 @@ while ($row = $dataTte->fetch_assoc()) {
         $riwayat_tte[] = $row;
     }
 }
+
+// Ambil data user untuk modal konfirmasi
+$qUserData = $conn->prepare("
+    SELECT 
+        u.nama, 
+        u.nik as nik_karyawan,
+        u.jabatan, 
+        u.unit_kerja,
+        ip.no_ktp
+    FROM users u
+    LEFT JOIN informasi_pribadi ip ON u.id = ip.user_id
+    WHERE u.id = ?
+");
+$qUserData->bind_param("i", $user_id);
+$qUserData->execute();
+$userData = $qUserData->get_result()->fetch_assoc();
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -150,6 +166,7 @@ while ($row = $dataTte->fetch_assoc()) {
 <link rel="stylesheet" href="assets/modules/fontawesome/css/all.min.css">
 <link rel="stylesheet" href="assets/css/style.css">
 <link rel="stylesheet" href="assets/css/components.css">
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
 .tte-card {
     border-radius: 15px;
@@ -271,13 +288,11 @@ endif;
         </p>
     </div>
     
-    <form method="POST" onsubmit="return confirm('Yakin ingin membuat TTE baru?');">
-        <div class="text-center">
-            <button type="submit" name="generate_tte" class="btn btn-primary btn-lg">
-                <i class="fas fa-plus-circle"></i> Buat TTE Sekarang
-            </button>
-        </div>
-    </form>
+    <div class="text-center">
+        <button type="button" class="btn btn-primary btn-lg" onclick="showKonfirmasiTTE()">
+            <i class="fas fa-plus-circle"></i> Buat TTE Sekarang
+        </button>
+    </div>
 </div>
 </div>
 
@@ -522,6 +537,155 @@ endif;
 setTimeout(function() {
     $('.alert-dismissible').fadeOut('slow');
 }, 5000);
+
+function showKonfirmasiTTE() {
+    // Data dari PHP
+    const nama = <?= json_encode($userData['nama'] ?? '') ?>;
+    const nik = <?= json_encode($userData['nik_karyawan'] ?? '') ?>;
+    const ktp = <?= json_encode($userData['no_ktp'] ?? '') ?>;
+    const jabatan = <?= json_encode($userData['jabatan'] ?? '') ?>;
+    const unit = <?= json_encode($userData['unit_kerja'] ?? '') ?>;
+    const dataLengkap = <?= json_encode(!empty($userData['nama']) && 
+                   !empty($userData['nik_karyawan']) && 
+                   !empty($userData['no_ktp']) && 
+                   !empty($userData['jabatan']) && 
+                   !empty($userData['unit_kerja'])) ?>;
+    
+    // Buat badge untuk status
+    function getBadge(value) {
+        if (value && value.trim() !== '') {
+            return `<span style="background: #28a745; color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; margin-left: 5px;">
+                        <i class="fas fa-check"></i> Terisi
+                    </span>`;
+        } else {
+            return `<span style="color: #dc3545;"><i class="fas fa-times"></i> Belum diisi</span>`;
+        }
+    }
+    
+    function getValueOrEmpty(value) {
+        return value && value.trim() !== '' ? `<strong>${value}</strong>` : '';
+    }
+    
+    let htmlContent = `
+        <div style="text-align: left; padding: 5px;">
+            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 10px; margin-bottom: 15px; border-radius: 5px; font-size: 13px;">
+                <strong><i class="fas fa-info-circle"></i> Penting!</strong><br>
+                Pastikan semua data sudah terisi dengan benar sebelum membuat TTE.
+            </div>
+            
+            <h6 style="margin-bottom: 12px; font-size: 14px;"><i class="fas fa-clipboard-check"></i> Data yang Diperlukan:</h6>
+            
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 13px;">
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; width: 40%; font-weight: bold;">
+                        <i class="fas fa-user" style="color: #6777ef;"></i> Nama
+                    </td>
+                    <td style="padding: 8px;">
+                        ${getValueOrEmpty(nama)}
+                        ${getBadge(nama)}
+                    </td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; font-weight: bold;">
+                        <i class="fas fa-id-badge" style="color: #17a2b8;"></i> NIK Karyawan
+                    </td>
+                    <td style="padding: 8px;">
+                        ${getValueOrEmpty(nik)}
+                        ${getBadge(nik)}
+                    </td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; font-weight: bold;">
+                        <i class="fas fa-id-card" style="color: #28a745;"></i> No. KTP
+                    </td>
+                    <td style="padding: 8px;">
+                        ${getValueOrEmpty(ktp)}
+                        ${getBadge(ktp)}
+                    </td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; font-weight: bold;">
+                        <i class="fas fa-briefcase" style="color: #17a2b8;"></i> Jabatan
+                    </td>
+                    <td style="padding: 8px;">
+                        ${getValueOrEmpty(jabatan)}
+                        ${getBadge(jabatan)}
+                    </td>
+                </tr>
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; font-weight: bold;">
+                        <i class="fas fa-building" style="color: #ffc107;"></i> Unit Kerja
+                    </td>
+                    <td style="padding: 8px;">
+                        ${getValueOrEmpty(unit)}
+                        ${getBadge(unit)}
+                    </td>
+                </tr>
+            </table>
+            
+            ${!dataLengkap ? `
+            <div style="background: #f8d7da; border-left: 4px solid #dc3545; padding: 10px; border-radius: 5px; font-size: 13px;">
+                <strong><i class="fas fa-exclamation-triangle"></i> Data Belum Lengkap!</strong><br>
+                Silakan lengkapi data di menu <strong>Profil Saya</strong> terlebih dahulu.
+            </div>
+            ` : `
+            <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 10px; border-radius: 5px; font-size: 13px;">
+                <strong><i class="fas fa-check-circle"></i> Data Sudah Lengkap!</strong><br>
+                Anda dapat melanjutkan proses pembuatan TTE.
+            </div>
+            `}
+        </div>
+    `;
+    
+    if (dataLengkap) {
+        Swal.fire({
+            title: '<i class="fas fa-exclamation-triangle"></i> Konfirmasi Data TTE',
+            html: htmlContent,
+            icon: null,
+            showCancelButton: true,
+            confirmButtonColor: '#6777ef',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="fas fa-check"></i> Ya, Buat TTE',
+            cancelButtonText: '<i class="fas fa-times"></i> Batal',
+            width: '550px',
+            customClass: {
+                popup: 'swal-wide'
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                // Submit form
+                let form = document.createElement('form');
+                form.method = 'POST';
+                form.action = 'buat_tte.php';
+                
+                let input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'generate_tte';
+                input.value = '1';
+                
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        });
+    } else {
+        Swal.fire({
+            title: '<i class="fas fa-exclamation-triangle"></i> Konfirmasi Data TTE',
+            html: htmlContent,
+            icon: null,
+            showCancelButton: true,
+            confirmButtonColor: '#ffc107',
+            cancelButtonColor: '#6c757d',
+            confirmButtonText: '<i class="fas fa-edit"></i> Lengkapi Data',
+            cancelButtonText: '<i class="fas fa-times"></i> Tutup',
+            width: '550px'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                window.location.href = 'profile2.php';
+            }
+        });
+    }
+}
 </script>
 
 </body>

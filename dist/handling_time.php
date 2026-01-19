@@ -20,9 +20,16 @@ if (mysqli_num_rows($result) == 0) {
 $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
 $dari_tanggal = isset($_GET['dari_tanggal']) ? $_GET['dari_tanggal'] : '';
 $sampai_tanggal = isset($_GET['sampai_tanggal']) ? $_GET['sampai_tanggal'] : '';
+$filter_status = isset($_GET['status']) ? $_GET['status'] : '';
 
 if ($dari_tanggal) $dari_tanggal = date('Y-m-d', strtotime($dari_tanggal));
 if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal));
+
+// Pagination
+$limit = 10; // Data per halaman
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$page = max(1, $page);
+$offset = ($page - 1) * $limit;
 ?>
 
 <!DOCTYPE html>
@@ -40,6 +47,9 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
   <style>
     .table-responsive-custom { width: 100%; overflow-x: auto; }
     .table-responsive-custom table { min-width: 1500px; white-space: nowrap; }
+    .pagination { margin-top: 20px; }
+    .pagination .page-link { color: #6777ef; }
+    .pagination .page-item.active .page-link { background-color: #6777ef; border-color: #6777ef; }
   </style>
 </head>
 <body>
@@ -68,23 +78,51 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
               </ul>
 
               <!-- Filter -->
-              <form method="GET" class="form-inline mb-3">
-                <div class="form-group mr-2">
-                  <label class="mr-2">Dari</label>
-                  <input type="date" name="dari_tanggal" class="form-control" value="<?php echo $dari_tanggal; ?>">
+              <form method="GET" class="mb-3">
+                <div class="row">
+                  <div class="col-md-2">
+                    <div class="form-group">
+                      <label>Dari Tanggal</label>
+                      <input type="date" name="dari_tanggal" class="form-control" value="<?php echo $dari_tanggal; ?>">
+                    </div>
+                  </div>
+                  <div class="col-md-2">
+                    <div class="form-group">
+                      <label>Sampai Tanggal</label>
+                      <input type="date" name="sampai_tanggal" class="form-control" value="<?php echo $sampai_tanggal; ?>">
+                    </div>
+                  </div>
+                  <div class="col-md-2">
+                    <div class="form-group">
+                      <label>Status</label>
+                      <select name="status" class="form-control">
+                        <option value="">Semua Status</option>
+                        <option value="Menunggu" <?php echo $filter_status == 'Menunggu' ? 'selected' : ''; ?>>Menunggu</option>
+                        <option value="Diproses" <?php echo $filter_status == 'Diproses' ? 'selected' : ''; ?>>Diproses</option>
+                        <option value="Selesai" <?php echo $filter_status == 'Selesai' ? 'selected' : ''; ?>>Selesai</option>
+                        <option value="Tidak Bisa Diperbaiki" <?php echo $filter_status == 'Tidak Bisa Diperbaiki' ? 'selected' : ''; ?>>Tidak Bisa Diperbaiki</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="form-group">
+                      <label>Pencarian</label>
+                      <input type="text" name="keyword" class="form-control" placeholder="NIK / Nama / No Tiket"
+                             value="<?php echo htmlspecialchars($keyword); ?>">
+                    </div>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="form-group">
+                      <label>&nbsp;</label>
+                      <div>
+                        <button type="submit" class="btn btn-primary btn-sm mr-1"><i class="fas fa-search"></i> Filter</button>
+                        <a href="handling_time.php" class="btn btn-secondary btn-sm mr-1"><i class="fas fa-sync"></i> Reset</a>
+                        <a href="handling_time_hardware_pdf.php?dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&keyword=<?php echo urlencode($keyword); ?>&status=<?php echo urlencode($filter_status); ?>"
+                           target="_blank" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="form-group mr-2">
-                  <label class="mr-2">Sampai</label>
-                  <input type="date" name="sampai_tanggal" class="form-control" value="<?php echo $sampai_tanggal; ?>">
-                </div>
-                <div class="form-group mr-2">
-                  <input type="text" name="keyword" class="form-control" placeholder="Cari NIK / Nama / No Tiket"
-                         value="<?php echo htmlspecialchars($keyword); ?>">
-                </div>
-                <button type="submit" class="btn btn-primary btn-sm mr-2">Filter</button>
-                <a href="handling_time.php" class="btn btn-secondary btn-sm mr-2">Reset</a>
-                <a href="handling_time_hardware_pdf.php?dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&keyword=<?php echo urlencode($keyword); ?>"
-                   target="_blank" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> Cetak PDF</a>
               </form>
 
               <!-- Tabel -->
@@ -114,7 +152,27 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                   </thead>
                   <tbody>
                     <?php
-                    $no = 1;
+                    // Query untuk hitung total data
+                    $query_count = "SELECT COUNT(*) as total FROM tiket_it_hardware WHERE 1=1";
+                    
+                    if (!empty($keyword)) {
+                      $kw = mysqli_real_escape_string($conn, $keyword);
+                      $query_count .= " AND (nik LIKE '%$kw%' OR nama LIKE '%$kw%' OR nomor_tiket LIKE '%$kw%')";
+                    }
+                    if (!empty($dari_tanggal) && !empty($sampai_tanggal)) {
+                      $query_count .= " AND DATE(tanggal_input) BETWEEN '$dari_tanggal' AND '$sampai_tanggal'";
+                    }
+                    if (!empty($filter_status)) {
+                      $status_escaped = mysqli_real_escape_string($conn, $filter_status);
+                      $query_count .= " AND status = '$status_escaped'";
+                    }
+                    
+                    $result_count = mysqli_query($conn, $query_count);
+                    $row_count = mysqli_fetch_assoc($result_count);
+                    $total_data = $row_count['total'];
+                    $total_pages = ceil($total_data / $limit);
+                    
+                    // Query untuk ambil data dengan pagination
                     $query = "SELECT * FROM tiket_it_hardware WHERE 1=1";
 
                     if (!empty($keyword)) {
@@ -124,11 +182,16 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                     if (!empty($dari_tanggal) && !empty($sampai_tanggal)) {
                       $query .= " AND DATE(tanggal_input) BETWEEN '$dari_tanggal' AND '$sampai_tanggal'";
                     }
+                    if (!empty($filter_status)) {
+                      $status_escaped = mysqli_real_escape_string($conn, $filter_status);
+                      $query .= " AND status = '$status_escaped'";
+                    }
 
-                    $query .= " ORDER BY tanggal_input DESC";
+                    $query .= " ORDER BY tanggal_input DESC LIMIT $limit OFFSET $offset";
                     $result = mysqli_query($conn, $query);
 
                     if (mysqli_num_rows($result) > 0) {
+                      $no = $offset + 1;
                       while ($row = mysqli_fetch_assoc($result)) {
                         $kendala = htmlspecialchars($row['kendala']);
                         echo "<tr>";
@@ -190,6 +253,61 @@ if ($sampai_tanggal) $sampai_tanggal = date('Y-m-d', strtotime($sampai_tanggal))
                   </tbody>
                 </table>
               </div>
+
+              <!-- Pagination -->
+              <?php if ($total_pages > 1): ?>
+              <nav aria-label="Navigasi halaman">
+                <ul class="pagination justify-content-center">
+                  <!-- Tombol Previous -->
+                  <li class="page-item <?php echo $page <= 1 ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?page=<?php echo $page - 1; ?>&keyword=<?php echo urlencode($keyword); ?>&dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&status=<?php echo urlencode($filter_status); ?>">
+                      <i class="fas fa-chevron-left"></i>
+                    </a>
+                  </li>
+
+                  <?php
+                  // Tampilkan nomor halaman
+                  $start_page = max(1, $page - 2);
+                  $end_page = min($total_pages, $page + 2);
+
+                  if ($start_page > 1) {
+                    echo '<li class="page-item"><a class="page-link" href="?page=1&keyword=' . urlencode($keyword) . '&dari_tanggal=' . $dari_tanggal . '&sampai_tanggal=' . $sampai_tanggal . '&status=' . urlencode($filter_status) . '">1</a></li>';
+                    if ($start_page > 2) {
+                      echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                  }
+
+                  for ($i = $start_page; $i <= $end_page; $i++) {
+                    $active = $i == $page ? 'active' : '';
+                    echo '<li class="page-item ' . $active . '">
+                            <a class="page-link" href="?page=' . $i . '&keyword=' . urlencode($keyword) . '&dari_tanggal=' . $dari_tanggal . '&sampai_tanggal=' . $sampai_tanggal . '&status=' . urlencode($filter_status) . '">' . $i . '</a>
+                          </li>';
+                  }
+
+                  if ($end_page < $total_pages) {
+                    if ($end_page < $total_pages - 1) {
+                      echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                    }
+                    echo '<li class="page-item"><a class="page-link" href="?page=' . $total_pages . '&keyword=' . urlencode($keyword) . '&dari_tanggal=' . $dari_tanggal . '&sampai_tanggal=' . $sampai_tanggal . '&status=' . urlencode($filter_status) . '">' . $total_pages . '</a></li>';
+                  }
+                  ?>
+
+                  <!-- Tombol Next -->
+                  <li class="page-item <?php echo $page >= $total_pages ? 'disabled' : ''; ?>">
+                    <a class="page-link" href="?page=<?php echo $page + 1; ?>&keyword=<?php echo urlencode($keyword); ?>&dari_tanggal=<?php echo $dari_tanggal; ?>&sampai_tanggal=<?php echo $sampai_tanggal; ?>&status=<?php echo urlencode($filter_status); ?>">
+                      <i class="fas fa-chevron-right"></i>
+                    </a>
+                  </li>
+                </ul>
+              </nav>
+              
+              <!-- Info Total Data -->
+              <div class="text-center">
+                <small class="text-muted">
+                  Menampilkan <?php echo min($offset + 1, $total_data); ?> - <?php echo min($offset + $limit, $total_data); ?> dari <?php echo $total_data; ?> data
+                </small>
+              </div>
+              <?php endif; ?>
 
             </div>
           </div>

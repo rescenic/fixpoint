@@ -20,12 +20,22 @@ if (mysqli_num_rows($result) == 0) {
 $start_date = $_GET['start_date'] ?? '';
 $end_date = $_GET['end_date'] ?? '';
 
+// Pagination settings
+$limit = 10; // Data per halaman
+$page_hardware = isset($_GET['page_hardware']) ? (int)$_GET['page_hardware'] : 1;
+$page_software = isset($_GET['page_software']) ? (int)$_GET['page_software'] : 1;
+
+if ($page_hardware < 1) $page_hardware = 1;
+if ($page_software < 1) $page_software = 1;
+
+$start_hardware = ($page_hardware - 1) * $limit;
+$start_software = ($page_software - 1) * $limit;
+
 // Validasi dan format tanggal untuk query
 $where_hardware = '';
 $where_software = '';
 
 if ($start_date && $end_date) {
-    // Format ke Y-m-d untuk query, tambahkan waktu mulai dan akhir hari
     $start_datetime = date('Y-m-d 00:00:00', strtotime($start_date));
     $end_datetime = date('Y-m-d 23:59:59', strtotime($end_date));
     
@@ -33,13 +43,34 @@ if ($start_date && $end_date) {
     $where_software = " WHERE tanggal_ba BETWEEN '$start_datetime' AND '$end_datetime' ";
 }
 
-// Query data hardware dengan filter
-$query_hardware = "SELECT * FROM berita_acara $where_hardware ORDER BY tanggal_ba DESC";
+// Query count untuk pagination Hardware
+$count_hardware_query = "SELECT COUNT(*) as total FROM berita_acara $where_hardware";
+$count_hardware_result = mysqli_query($conn, $count_hardware_query);
+$total_hardware = mysqli_fetch_assoc($count_hardware_result)['total'];
+$total_pages_hardware = ceil($total_hardware / $limit);
+
+// Query count untuk pagination Software
+$count_software_query = "SELECT COUNT(*) as total FROM berita_acara_software $where_software";
+$count_software_result = mysqli_query($conn, $count_software_query);
+$total_software = mysqli_fetch_assoc($count_software_result)['total'];
+$total_pages_software = ceil($total_software / $limit);
+
+// Query data hardware dengan filter dan pagination
+$query_hardware = "SELECT * FROM berita_acara $where_hardware ORDER BY tanggal_ba DESC LIMIT $start_hardware, $limit";
 $result_hardware = mysqli_query($conn, $query_hardware);
 
-// Query data software dengan filter
-$query_software = "SELECT * FROM berita_acara_software $where_software ORDER BY tanggal_ba DESC";
+// Query data software dengan filter dan pagination
+$query_software = "SELECT * FROM berita_acara_software $where_software ORDER BY tanggal_ba DESC LIMIT $start_software, $limit";
 $result_software = mysqli_query($conn, $query_software);
+
+// Function untuk generate query string pagination
+function get_query_string($exclude = []) {
+    $params = $_GET;
+    foreach ($exclude as $key) {
+        unset($params[$key]);
+    }
+    return http_build_query($params);
+}
 ?>
 
 <!DOCTYPE html>
@@ -63,13 +94,31 @@ $result_software = mysqli_query($conn, $query_software);
 
     .table-responsive-custom table {
       width: 100%;
-      min-width: 1300px; /* tambah lebar supaya muat kolom aksi */
+      min-width: 1500px;
       white-space: nowrap;
     }
 
     .table thead th {
       background-color: #000 !important;
       color: #fff !important;
+    }
+    
+    .pagination-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+    }
+    
+    .pagination-info {
+      font-size: 14px;
+      color: #000;
+      font-weight: 500;
+    }
+    
+    .btn-cetak {
+      padding: 5px 10px;
+      font-size: 12px;
     }
   </style>
 </head>
@@ -114,22 +163,22 @@ $result_software = mysqli_query($conn, $query_software);
             <div class="card-body">
               <ul class="nav nav-tabs" id="myTab" role="tablist">
                 <li class="nav-item">
-                  <a class="nav-link active" id="hardware-tab" data-toggle="tab" href="#hardware" role="tab" aria-controls="hardware" aria-selected="true">BA IT Hardware</a>
+                  <a class="nav-link active" id="hardware-tab" data-toggle="tab" href="#hardware" role="tab">BA IT Hardware</a>
                 </li>
                 <li class="nav-item">
-                  <a class="nav-link" id="software-tab" data-toggle="tab" href="#software" role="tab" aria-controls="software" aria-selected="false">BA IT Software</a>
+                  <a class="nav-link" id="software-tab" data-toggle="tab" href="#software" role="tab">BA IT Software</a>
                 </li>
               </ul>
 
               <div class="tab-content mt-4" id="myTabContent">
 
                 <!-- BA IT Hardware Tab -->
-                <div class="tab-pane fade show active" id="hardware" role="tabpanel" aria-labelledby="hardware-tab">
+                <div class="tab-pane fade show active" id="hardware" role="tabpanel">
                   <div class="table-responsive-custom">
-                    <table class="table table-bordered table-striped table-hover">
+                    <table class="table table-bordered table-striped table-hover table-sm">
                       <thead>
                         <tr>
-                          <th>No</th>
+                          <th width="40">No</th>
                           <th>Nomor BA</th>
                           <th>Nomor Tiket</th>
                           <th>Tanggal</th>
@@ -143,16 +192,17 @@ $result_software = mysqli_query($conn, $query_software);
                           <th>Tanggal BA</th>
                           <th>Teknisi</th>
                           <th>Dibuat</th>
+                          <th width="100">Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
                         <?php 
                         if(mysqli_num_rows($result_hardware) > 0):
-                          $no = 1;
+                          $no = $start_hardware + 1;
                           while($row = mysqli_fetch_assoc($result_hardware)): 
                         ?>
                           <tr>
-                            <td><?= $no++; ?></td>
+                            <td class="text-center"><?= $no++; ?></td>
                             <td><?= htmlspecialchars($row['nomor_ba']); ?></td>
                             <td><?= htmlspecialchars($row['nomor_tiket']); ?></td>
                             <td><?= date('d-m-Y H:i', strtotime($row['tanggal'])); ?></td>
@@ -166,7 +216,14 @@ $result_software = mysqli_query($conn, $query_software);
                             <td><?= date('d-m-Y H:i', strtotime($row['tanggal_ba'])); ?></td>
                             <td><?= htmlspecialchars($row['teknisi']); ?></td>
                             <td><?= date('d-m-Y H:i', strtotime($row['created_at'])); ?></td>
-                           
+                            <td class="text-center">
+                              <a href="cetak_berita_acara.php?id=<?= $row['id'] ?>" 
+                                 target="_blank" 
+                                 class="btn btn-info btn-sm btn-cetak" 
+                                 title="Cetak BA">
+                                <i class="fas fa-print"></i> Cetak
+                              </a>
+                            </td>
                           </tr>
                         <?php 
                           endwhile;
@@ -178,15 +235,63 @@ $result_software = mysqli_query($conn, $query_software);
                       </tbody>
                     </table>
                   </div>
+                  
+                  <!-- Pagination Hardware -->
+                  <?php if ($total_pages_hardware > 1): ?>
+                  <div class="pagination-wrapper">
+                    <div class="pagination-info">
+                      Menampilkan <?= $start_hardware + 1 ?> - <?= min($start_hardware + $limit, $total_hardware) ?> dari <?= $total_hardware ?> data
+                    </div>
+                    <nav>
+                      <ul class="pagination mb-0">
+                        <li class="page-item <?= ($page_hardware <= 1) ? 'disabled' : '' ?>">
+                          <a class="page-link" href="?<?= get_query_string(['page_hardware']) ?>&page_hardware=<?= $page_hardware - 1 ?>">
+                            <span>&laquo;</span>
+                          </a>
+                        </li>
+
+                        <?php
+                        $start_page = max(1, $page_hardware - 2);
+                        $end_page = min($total_pages_hardware, $page_hardware + 2);
+
+                        if($start_page > 1): ?>
+                          <li class="page-item"><a class="page-link" href="?<?= get_query_string(['page_hardware']) ?>&page_hardware=1">1</a></li>
+                          <?php if($start_page > 2): ?>
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                          <?php endif;
+                        endif;
+
+                        for($i = $start_page; $i <= $end_page; $i++): ?>
+                          <li class="page-item <?= ($i == $page_hardware) ? 'active' : '' ?>">
+                            <a class="page-link" href="?<?= get_query_string(['page_hardware']) ?>&page_hardware=<?= $i ?>"><?= $i ?></a>
+                          </li>
+                        <?php endfor;
+
+                        if($end_page < $total_pages_hardware): 
+                          if($end_page < $total_pages_hardware - 1): ?>
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                          <?php endif; ?>
+                          <li class="page-item"><a class="page-link" href="?<?= get_query_string(['page_hardware']) ?>&page_hardware=<?= $total_pages_hardware ?>"><?= $total_pages_hardware ?></a></li>
+                        <?php endif; ?>
+
+                        <li class="page-item <?= ($page_hardware >= $total_pages_hardware) ? 'disabled' : '' ?>">
+                          <a class="page-link" href="?<?= get_query_string(['page_hardware']) ?>&page_hardware=<?= $page_hardware + 1 ?>">
+                            <span>&raquo;</span>
+                          </a>
+                        </li>
+                      </ul>
+                    </nav>
+                  </div>
+                  <?php endif; ?>
                 </div>
 
                 <!-- BA IT Software Tab -->
-                <div class="tab-pane fade" id="software" role="tabpanel" aria-labelledby="software-tab">
+                <div class="tab-pane fade" id="software" role="tabpanel">
                   <div class="table-responsive-custom">
-                    <table class="table table-bordered table-striped table-hover">
+                    <table class="table table-bordered table-striped table-hover table-sm">
                       <thead>
                         <tr>
-                          <th>No</th>
+                          <th width="40">No</th>
                           <th>Nomor BA</th>
                           <th>Nomor Tiket</th>
                           <th>Tanggal</th>
@@ -200,16 +305,17 @@ $result_software = mysqli_query($conn, $query_software);
                           <th>Tanggal BA</th>
                           <th>Teknisi</th>
                           <th>Dibuat</th>
+                          <th width="100">Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
                         <?php 
                         if(mysqli_num_rows($result_software) > 0):
-                          $no = 1;
+                          $no = $start_software + 1;
                           while($row = mysqli_fetch_assoc($result_software)): 
                         ?>
                           <tr>
-                            <td><?= $no++; ?></td>
+                            <td class="text-center"><?= $no++; ?></td>
                             <td><?= htmlspecialchars($row['nomor_ba']); ?></td>
                             <td><?= htmlspecialchars($row['nomor_tiket']); ?></td>
                             <td><?= date('d-m-Y H:i', strtotime($row['tanggal'])); ?></td>
@@ -223,7 +329,14 @@ $result_software = mysqli_query($conn, $query_software);
                             <td><?= date('d-m-Y H:i', strtotime($row['tanggal_ba'])); ?></td>
                             <td><?= htmlspecialchars($row['teknisi']); ?></td>
                             <td><?= date('d-m-Y H:i', strtotime($row['created_at'])); ?></td>
-                           
+                            <td class="text-center">
+                              <a href="cetak_ba_software.php?id=<?= $row['id'] ?>" 
+                                 target="_blank" 
+                                 class="btn btn-info btn-sm btn-cetak" 
+                                 title="Cetak BA">
+                                <i class="fas fa-print"></i> Cetak
+                              </a>
+                            </td>
                           </tr>
                         <?php 
                           endwhile;
@@ -235,19 +348,66 @@ $result_software = mysqli_query($conn, $query_software);
                       </tbody>
                     </table>
                   </div>
+                  
+                  <!-- Pagination Software -->
+                  <?php if ($total_pages_software > 1): ?>
+                  <div class="pagination-wrapper">
+                    <div class="pagination-info">
+                      Menampilkan <?= $start_software + 1 ?> - <?= min($start_software + $limit, $total_software) ?> dari <?= $total_software ?> data
+                    </div>
+                    <nav>
+                      <ul class="pagination mb-0">
+                        <li class="page-item <?= ($page_software <= 1) ? 'disabled' : '' ?>">
+                          <a class="page-link" href="?<?= get_query_string(['page_software']) ?>&page_software=<?= $page_software - 1 ?>">
+                            <span>&laquo;</span>
+                          </a>
+                        </li>
+
+                        <?php
+                        $start_page = max(1, $page_software - 2);
+                        $end_page = min($total_pages_software, $page_software + 2);
+
+                        if($start_page > 1): ?>
+                          <li class="page-item"><a class="page-link" href="?<?= get_query_string(['page_software']) ?>&page_software=1">1</a></li>
+                          <?php if($start_page > 2): ?>
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                          <?php endif;
+                        endif;
+
+                        for($i = $start_page; $i <= $end_page; $i++): ?>
+                          <li class="page-item <?= ($i == $page_software) ? 'active' : '' ?>">
+                            <a class="page-link" href="?<?= get_query_string(['page_software']) ?>&page_software=<?= $i ?>"><?= $i ?></a>
+                          </li>
+                        <?php endfor;
+
+                        if($end_page < $total_pages_software): 
+                          if($end_page < $total_pages_software - 1): ?>
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                          <?php endif; ?>
+                          <li class="page-item"><a class="page-link" href="?<?= get_query_string(['page_software']) ?>&page_software=<?= $total_pages_software ?>"><?= $total_pages_software ?></a></li>
+                        <?php endif; ?>
+
+                        <li class="page-item <?= ($page_software >= $total_pages_software) ? 'disabled' : '' ?>">
+                          <a class="page-link" href="?<?= get_query_string(['page_software']) ?>&page_software=<?= $page_software + 1 ?>">
+                            <span>&raquo;</span>
+                          </a>
+                        </li>
+                      </ul>
+                    </nav>
+                  </div>
+                  <?php endif; ?>
                 </div>
 
-              </div> <!-- End Tab Content -->
-            </div> <!-- End Card Body -->
-          </div> <!-- End Card -->
+              </div>
+            </div>
+          </div>
 
-        </div> <!-- End Section Body -->
+        </div>
       </section>
-    </div> <!-- End Main Content -->
-  </div> <!-- End Main Wrapper -->
-</div> <!-- End App -->
+    </div>
+  </div>
+</div>
 
-<!-- Scripts -->
 <script src="assets/modules/jquery.min.js"></script>
 <script src="assets/modules/popper.js"></script>
 <script src="assets/modules/bootstrap/js/bootstrap.min.js"></script>
@@ -256,5 +416,21 @@ $result_software = mysqli_query($conn, $query_software);
 <script src="assets/js/stisla.js"></script>
 <script src="assets/js/scripts.js"></script>
 <script src="assets/js/custom.js"></script>
+
+<script>
+// Simpan tab aktif
+$('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+  localStorage.setItem('activeBATab', $(e.target).attr('href'));
+});
+
+// Restore tab aktif
+$(document).ready(function() {
+  var activeTab = localStorage.getItem('activeBATab');
+  if (activeTab) {
+    $('#myTab a[href="' + activeTab + '"]').tab('show');
+  }
+});
+</script>
+
 </body>
 </html>

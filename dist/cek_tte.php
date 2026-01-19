@@ -76,7 +76,7 @@ function generateFileHash($filePath) {
 function extractTextFromPDF($pdfPath) {
     $tokens = [];
     
-
+    // METHOD 1: Try pdftotext (best for content extraction)
     if (function_exists('shell_exec')) {
         $pdftotext = shell_exec('which pdftotext 2>/dev/null');
         if (!empty($pdftotext)) {
@@ -93,7 +93,29 @@ function extractTextFromPDF($pdfPath) {
         }
     }
     
-
+    // METHOD 2: Try pdfinfo for metadata extraction (STANDAR)
+    if (empty($tokens) && function_exists('shell_exec')) {
+        $pdfinfo = shell_exec('which pdfinfo 2>/dev/null');
+        if (!empty($pdfinfo)) {
+            try {
+                $output = shell_exec("pdfinfo " . escapeshellarg($pdfPath) . " 2>&1");
+                if ($output) {
+                    // Extract from Subject, Keywords, or other metadata
+                    preg_match_all('/(?:Subject|Keywords|Description):\s*([^\n]+)/i', $output, $meta_lines);
+                    if (!empty($meta_lines[1])) {
+                        foreach ($meta_lines[1] as $line) {
+                            preg_match_all('/(?:TTE-TOKEN:|TOKEN:)([a-f0-9]{32,64})/i', $line, $matches);
+                            if (!empty($matches[1])) {
+                                $tokens = array_merge($tokens, $matches[1]);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception $e) {}
+        }
+    }
+    
+    // METHOD 3: Raw file content scan (fallback)
     if (empty($tokens)) {
         $content = file_get_contents($pdfPath);
         if ($content) {
@@ -123,6 +145,7 @@ function extractTextFromWord($docPath) {
     try {
         $phpWord = \PhpOffice\PhpWord\IOFactory::load($docPath);
 
+        // METHOD 1: Extract from document content
         $text = '';
         foreach ($phpWord->getSections() as $section) {
             foreach ($section->getElements() as $element) {
@@ -146,6 +169,31 @@ function extractTextFromWord($docPath) {
             preg_match_all('/TTE-TOKEN:([a-f0-9]{32,64})/i', $text, $matches);
             if (!empty($matches[1])) {
                 $tokens = array_merge($tokens, $matches[1]);
+            }
+        }
+        
+        // METHOD 2: Extract from document metadata (STANDAR)
+        if (empty($tokens)) {
+            $docInfo = $phpWord->getDocInfo();
+            
+            // Try Description field
+            $description = $docInfo->getDescription();
+            if (!empty($description)) {
+                preg_match_all('/(?:TTE-TOKEN:|TOKEN:)([a-f0-9]{32,64})/i', $description, $matches);
+                if (!empty($matches[1])) {
+                    $tokens = array_merge($tokens, $matches[1]);
+                }
+            }
+            
+            // Try Keywords field
+            if (empty($tokens)) {
+                $keywords = $docInfo->getKeywords();
+                if (!empty($keywords)) {
+                    preg_match_all('/(?:TTE-TOKEN:|TOKEN:)([a-f0-9]{32,64})/i', $keywords, $matches);
+                    if (!empty($matches[1])) {
+                        $tokens = array_merge($tokens, $matches[1]);
+                    }
+                }
             }
         }
         

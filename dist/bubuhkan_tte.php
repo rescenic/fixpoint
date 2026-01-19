@@ -1,4 +1,11 @@
 <?php
+/**
+ * BUBUHKAN_TTE.PHP - IMPROVED VERSION
+ * - Null checks untuk semua getElementById
+ * - Error handling yang lebih baik
+ * - Konsisten dengan tte_dokumen.php yang berhasil
+ */
+
 session_start();
 include 'koneksi.php';
 require_once 'license_config.php';
@@ -33,7 +40,6 @@ if (!$tte) {
     header("Location: buat_tte.php");
     exit;
 }
-
 
 $required_folders = [
     __DIR__ . '/uploads/temp',
@@ -74,17 +80,30 @@ function processPDFCustomPosition($filepath, $qr_file, $position_x, $position_y,
             $pdf->AddPage($size['orientation'], [$size['width'], $size['height']]);
             $pdf->useTemplate($tplIdx);
 
-        
             if ($pageNo == $target_page) {
-                $qr_size = 20; // Ukuran QR diperkecil dari 30 ke 20
+                // FLEXIBLE QR SIZE
+                $qr_size_percent = 3.5;
+                $qr_size = ($qr_size_percent / 100) * $size['width'];
+                
+                if ($qr_size < 30) $qr_size = 30;
+                if ($qr_size > 80) $qr_size = 80;
+                
+                // POSITION FROM PERCENTAGE
                 $x = ($position_x / 100) * $size['width'];
                 $y = ($position_y / 100) * $size['height'];
+                
+                // Boundary check
+                if ($x + $qr_size > $size['width']) $x = $size['width'] - $qr_size - 5;
+                if ($y + $qr_size > $size['height']) $y = $size['height'] - $qr_size - 5;
+                if ($x < 0) $x = 5;
+                if ($y < 0) $y = 5;
 
                 if (file_exists($qr_file)) {
                     $pdf->Image($qr_file, $x, $y, $qr_size, $qr_size);
                 }
 
-                $pdf->SetFont('Arial', '', 0.1);
+                // Hidden token
+                $pdf->SetFont('helvetica', '', 1);
                 $pdf->SetTextColor(255, 255, 255);
                 $pdf->SetXY(0, 0);
                 $pdf->Cell(0, 0, 'TTE-TOKEN:' . $tte['token'], 0, 0, 'L');
@@ -94,17 +113,33 @@ function processPDFCustomPosition($filepath, $qr_file, $position_x, $position_y,
         $output_dir = __DIR__ . '/uploads/signed/';
         $output_file = $output_dir . $filename;
         
-        $pdf->SetCreator('FixPoint TTE System');
-        $pdf->SetAuthor($tte['nama']);
-        $pdf->SetSubject('TTE-TOKEN:' . $tte['token']);
-        $pdf->Output('F', $output_file);
-
-        if (file_exists($output_file)) {
+        $pdf->SetCreator('FixPoint TTE System v2.0');
+        $pdf->SetAuthor($tte['nama'] . ' (NIK: ' . $tte['nik'] . ')');
+        $pdf->SetTitle('Dokumen Resmi - ' . pathinfo($filename, PATHINFO_FILENAME));
+        
+        // Clean output path
+        $cleanOutputPath = str_replace('//', '/', $output_file);
+        
+        // Ensure directory writable
+        if (!is_writable($output_dir)) {
+            throw new Exception("Output directory not writable");
+        }
+        
+        $pdf->Output($cleanOutputPath, 'F');
+        
+        if (!file_exists($cleanOutputPath)) {
+            throw new Exception("Failed to create PDF");
+        }
+        
+        @chmod($cleanOutputPath, 0644);
+        
+        if (file_exists($cleanOutputPath)) {
             @unlink($filepath);
-            return $output_file;
+            return $cleanOutputPath;
         }
         return false;
     } catch (Exception $e) {
+        error_log("PDF processing error: " . $e->getMessage());
         return false;
     }
 }
@@ -119,10 +154,8 @@ function processWordCustomPosition($filepath, $qr_file, $position_x, $position_y
         \PhpOffice\PhpWord\Settings::setTempDir($custom_temp);
         
         $phpWord = \PhpOffice\PhpWord\IOFactory::load($filepath);
-
         $section = $phpWord->addSection();
         
-     
         if ($position_y < 50) {
             $section->addTextBreak(3);
         }
@@ -136,7 +169,6 @@ function processWordCustomPosition($filepath, $qr_file, $position_x, $position_y
         
         $table->addRow();
         
-        // Tentukan posisi berdasarkan X
         if ($position_x > 50) {
             $table->addCell(7000);
             $cell = $table->addCell(5000);
@@ -182,15 +214,14 @@ function processWordCustomPosition($filepath, $qr_file, $position_x, $position_y
             ['alignment' => \PhpOffice\PhpWord\SimpleType\Jc::CENTER]
         );
         
-        // Token tersembunyi
         $section->addText('TTE-TOKEN:' . $tte['token'], ['size' => 1, 'color' => 'FFFFFF']);
         
         $output_dir = __DIR__ . '/uploads/signed/';
         $output_file = $output_dir . pathinfo($filename, PATHINFO_FILENAME) . '_signed.docx';
         
-        $phpWord->getDocInfo()->setCreator('FixPoint TTE System');
-        $phpWord->getDocInfo()->setTitle('Dokumen Bertanda Tangan');
-        $phpWord->getDocInfo()->setDescription('TTE-TOKEN:' . $tte['token']);
+        $docInfo = $phpWord->getDocInfo();
+        $docInfo->setCreator('FixPoint TTE System v2.0');
+        $docInfo->setLastModifiedBy($tte['nama']);
         
         $objWriter = \PhpOffice\PhpWord\IOFactory::createWriter($phpWord, 'Word2007');
         $objWriter->save($output_file);
@@ -231,13 +262,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bubuhkan_tte'])) {
                 $qr_dir = __DIR__ . '/uploads/qr_temp/';
                 $qr_file = $qr_dir . 'qr_' . time() . '.png';
                 
-                $qr_url = "http://" . $_SERVER['HTTP_HOST'] . dirname($_SERVER['REQUEST_URI']) . "/cek_tte.php?token=" . $tte['token'];
-                $qr_image = @file_get_contents("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($qr_url));
+                // QR Content
+                $perusahaan_info = null;
+                if (!empty($tte['perusahaan_id'])) {
+                    $qPer = $conn->prepare("SELECT nama_perusahaan, kota, provinsi FROM perusahaan WHERE id = ?");
+                    $qPer->bind_param("i", $tte['perusahaan_id']);
+                    $qPer->execute();
+                    $perusahaan_info = $qPer->get_result()->fetch_assoc();
+                }
+                
+                $original_name = pathinfo($file['name'], PATHINFO_FILENAME);
+                $qr_content = "=== TANDA TANGAN ELEKTRONIK ===\n\n";
+                $qr_content .= "NAMA DOKUMEN:\n";
+                $qr_content .= $original_name . "\n\n";
+                $qr_content .= "INFORMASI PENANDATANGAN:\n";
+                $qr_content .= "Nama: " . $tte['nama'] . "\n";
+                $qr_content .= "NIK/NIP: " . $tte['nik'] . "\n";
+                $qr_content .= "Jabatan: " . ($tte['jabatan'] ?? '-') . "\n";
+                $qr_content .= "Unit/Bagian: " . ($tte['unit_kerja'] ?? '-') . "\n\n";
+                
+                if ($perusahaan_info) {
+                    $qr_content .= "PERUSAHAAN/INSTANSI:\n";
+                    $qr_content .= $perusahaan_info['nama_perusahaan'] . "\n\n";
+                }
+                
+                $qr_content .= "WAKTU PENANDATANGANAN:\n";
+                $qr_content .= "Tanggal: " . date('d F Y') . "\n";
+                $qr_content .= "Jam: " . date('H:i') . " WIB\n\n";
+                $qr_content .= "Token: " . substr($tte['token'], 0, 16) . "...\n\n";
+                $qr_content .= "✓ TTE Terverifikasi\n";
+                $qr_content .= "Sesuai UU No.11/2008 tentang ITE";
+                
+                $qr_image = @file_get_contents("https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($qr_content));
                 
                 if ($qr_image !== false) {
                     file_put_contents($qr_file, $qr_image);
                     
-                    $original_name = pathinfo($file['name'], PATHINFO_FILENAME);
                     $final_filename = $original_name . '_signed_' . time() . '.' . $ext;
                     
                     if ($ext === 'pdf') {
@@ -252,7 +312,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bubuhkan_tte'])) {
                         $file_hash = generateFileHash($hasil_file);
                         if ($file_hash) {
                             saveFileHashToDatabase($conn, $tte['token'], $file_hash);
-                            // NEW: Simpan log penandatanganan dengan timestamp akurat
                             saveDocumentSigningLog($conn, $tte['token'], $user_id, basename($hasil_file), $file_hash);
                         }
                         
@@ -303,8 +362,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bubuhkan_tte'])) {
 .preview-container { position: relative; border: 2px solid #6777ef; border-radius: 12px; background: #f8f9fa; min-height: 600px; display: none; margin-top: 1.5rem; overflow: hidden; }
 .preview-container.active { display: block; }
 #pdfCanvas { max-width: 100%; background: white; display: block; margin: 0 auto; }
-.tte-stamp { position: absolute; width: 70px; cursor: move; background: rgba(103,119,239,0.15); border: 3px dashed #6777ef; border-radius: 10px; padding: 5px; text-align: center; user-select: none; z-index: 50; }
-.tte-stamp img { width: 55px; height: 55px; pointer-events: none; }
+.tte-stamp { position: absolute; width: 100px; height: 100px; cursor: move; background: rgba(103,119,239,0.15); border: 3px dashed #6777ef; border-radius: 10px; padding: 5px; text-align: center; user-select: none; z-index: 50; left: 50px; top: 50px; }
+.tte-stamp img { width: 80px; height: 80px; pointer-events: none; }
 .position-info { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.85); color: white; padding: 10px 15px; border-radius: 8px; font-size: 0.85rem; font-family: monospace; z-index: 100; }
 .page-navigation { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.85); color: white; padding: 10px 15px; border-radius: 8px; z-index: 100; }
 .page-navigation button { background: #6777ef; border: none; color: white; padding: 5px 12px; margin: 0 5px; border-radius: 5px; cursor: pointer; }
@@ -319,8 +378,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bubuhkan_tte'])) {
 .word-preview { padding: 3rem; background: white; border: 2px solid #6777ef; border-radius: 12px; text-align: center; min-height: 400px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
 .info-badge { display: inline-block; padding: 0.5rem 1rem; background: #f0f3ff; border-radius: 8px; margin: 0.25rem; font-size: 0.9rem; }
 .info-badge i { color: #6777ef; margin-right: 5px; }
-.swal-wide { max-width: 700px !important; }
-.swal-compact { padding: 0.5rem !important; }
 </style>
 </head>
 <body>
@@ -386,7 +443,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bubuhkan_tte'])) {
                     </div>
                     <div class="tte-stamp" id="tteStamp">
                         <img src="generate_qr.php?token=<?= $tte['token'] ?>" alt="TTE">
-                        <div style="font-size: 0.7rem; color: #6777ef; font-weight: 700;">
+                        <div style="font-size: 0.7rem; color: #6777ef; font-weight: 700; margin-top: 3px;">
                             <i class="fas fa-arrows-alt"></i> DRAG
                         </div>
                     </div>
@@ -488,7 +545,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bubuhkan_tte'])) {
                 
                 <div class="alert alert-info mb-0">
                     <i class="fas fa-info-circle"></i>
-                    <small><strong>Tips:</strong> Untuk PDF multi-halaman, gunakan navigasi halaman untuk memilih halaman yang akan ditandatangani.</small>
+                    <small><strong>Tips:</strong> Drag marker QR untuk memposisikan sesuai keinginan. QR akan menyesuaikan ukuran dengan dokumen.</small>
                 </div>
             </div>
         </div>
@@ -518,18 +575,26 @@ let pdfDoc = null;
 let currentPage = 1;
 let totalPages = 1;
 let currentFileType = '';
+let pageRendering = false;
+let pageNumPending = null;
+let scale = 1.5;
 
+const btnSelectFile = document.getElementById('btnSelectFile');
+const dokumenInput = document.getElementById('dokumenInput');
 
-document.getElementById('btnSelectFile').onclick = function() {
-    document.getElementById('dokumenInput').click();
-};
+if (btnSelectFile) {
+    btnSelectFile.onclick = function() {
+        if (dokumenInput) dokumenInput.click();
+    };
+}
 
-
-document.getElementById('dokumenInput').onchange = function(e) {
-    if (this.files && this.files[0]) {
-        handleFileSelect(this.files[0]);
-    }
-};
+if (dokumenInput) {
+    dokumenInput.onchange = function(e) {
+        if (this.files && this.files[0]) {
+            handleFileSelect(this.files[0]);
+        }
+    };
+}
 
 function handleFileSelect(file) {
     const ext = file.name.split('.').pop().toLowerCase();
@@ -553,10 +618,12 @@ function handleFileSelect(file) {
         return;
     }
     
-    document.getElementById('uploadArea').style.display = 'none';
-    document.getElementById('tteForm').style.display = 'block';
+    const uploadArea = document.getElementById('uploadArea');
+    const tteForm = document.getElementById('tteForm');
     
-    // Add file to form
+    if (uploadArea) uploadArea.style.display = 'none';
+    if (tteForm) tteForm.style.display = 'block';
+    
     const dt = new DataTransfer();
     dt.items.add(file);
     
@@ -566,7 +633,7 @@ function handleFileSelect(file) {
         input.type = 'file';
         input.name = 'dokumen';
         input.style.display = 'none';
-        document.getElementById('tteForm').appendChild(input);
+        if (tteForm) tteForm.appendChild(input);
     }
     input.files = dt.files;
     
@@ -577,13 +644,19 @@ function handleFileSelect(file) {
         };
         reader.readAsArrayBuffer(file);
     } else {
- 
-        document.getElementById('wordFileName').textContent = file.name;
-        document.getElementById('previewContainer').classList.add('active');
-        document.getElementById('wordPreview').style.display = 'flex';
-        document.getElementById('pdfCanvas').style.display = 'none';
-        document.getElementById('tteStamp').style.display = 'none';
-        document.getElementById('positionInfo').style.display = 'none';
+        const wordFileNameEl = document.getElementById('wordFileName');
+        const previewContainer = document.getElementById('previewContainer');
+        const wordPreview = document.getElementById('wordPreview');
+        const pdfCanvas = document.getElementById('pdfCanvas');
+        const tteStamp = document.getElementById('tteStamp');
+        const positionInfo = document.getElementById('positionInfo');
+        
+        if (wordFileNameEl) wordFileNameEl.textContent = file.name;
+        if (previewContainer) previewContainer.classList.add('active');
+        if (wordPreview) wordPreview.style.display = 'flex';
+        if (pdfCanvas) pdfCanvas.style.display = 'none';
+        if (tteStamp) tteStamp.style.display = 'none';
+        if (positionInfo) positionInfo.style.display = 'none';
         switchMode('quick');
     }
 }
@@ -594,77 +667,156 @@ function loadPDF(data) {
         totalPages = pdf.numPages;
         currentPage = 1;
         
-        if (totalPages > 1) {
-            document.getElementById('pageNavigation').style.display = 'block';
+        const pageNavigation = document.getElementById('pageNavigation');
+        if (totalPages > 1 && pageNavigation) {
+            pageNavigation.style.display = 'block';
         }
         
         renderPage(currentPage);
-    });
-}
-
-function renderPage(pageNum) {
-    pdfDoc.getPage(pageNum).then(function(page) {
-        const canvas = document.getElementById('pdfCanvas');
-        const ctx = canvas.getContext('2d');
-        const viewport = page.getViewport({scale: 1.5});
-        
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
-        
-        page.render({canvasContext: ctx, viewport: viewport}).promise.then(function() {
-            document.getElementById('previewContainer').classList.add('active');
-            document.getElementById('pdfCanvas').style.display = 'block';
-            document.getElementById('wordPreview').style.display = 'none';
-            document.getElementById('tteStamp').style.display = 'block';
-            document.getElementById('positionInfo').style.display = 'block';
-            updatePosition(currentX, currentY);
-            updatePageInfo();
+    }).catch(function(error) {
+        console.error('Error loading PDF:', error);
+        Swal.fire({
+            icon: 'error',
+            title: 'Error',
+            text: 'Gagal memuat PDF: ' + error.message
         });
     });
 }
 
-function updatePageInfo() {
-    document.getElementById('pageInfo').textContent = `Page ${currentPage} / ${totalPages}`;
-    document.getElementById('targetPage').value = currentPage;
+function renderPage(num) {
+    if (!pdfDoc) return;
+    
+    pageRendering = true;
+    
+    pdfDoc.getPage(num).then(function(page) {
+        const canvas = document.getElementById('pdfCanvas');
+        if (!canvas) return;
+        
+        const ctx = canvas.getContext('2d');
+        const viewport = page.getViewport({scale: scale});
+        
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        const renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+        };
+        
+        const renderTask = page.render(renderContext);
+        
+        renderTask.promise.then(function() {
+            pageRendering = false;
+            if (pageNumPending !== null) {
+                renderPage(pageNumPending);
+                pageNumPending = null;
+            }
+            
+            const previewContainer = document.getElementById('previewContainer');
+            const pdfCanvas = document.getElementById('pdfCanvas');
+            const wordPreview = document.getElementById('wordPreview');
+            const tteStamp = document.getElementById('tteStamp');
+            const positionInfo = document.getElementById('positionInfo');
+            
+            if (previewContainer) previewContainer.classList.add('active');
+            if (pdfCanvas) pdfCanvas.style.display = 'block';
+            if (wordPreview) wordPreview.style.display = 'none';
+            if (tteStamp) tteStamp.style.display = 'block';
+            if (positionInfo) positionInfo.style.display = 'block';
+            
+            updatePosition(currentX, currentY);
+            updatePageInfo();
+        }).catch(function(error) {
+            console.error('Error rendering page:', error);
+        });
+    }).catch(function(error) {
+        console.error('Error getting page:', error);
+    });
 }
 
-function prevPage() {
-    if (currentPage > 1) {
-        currentPage--;
-        renderPage(currentPage);
+function updatePageInfo() {
+    const pageInfoEl = document.getElementById('pageInfo');
+    const pageNumberInput = document.getElementById('targetPage');
+    const prevBtnEl = document.getElementById('prevBtn');
+    const nextBtnEl = document.getElementById('nextBtn');
+    
+    if (pageInfoEl) {
+        pageInfoEl.textContent = `Page ${currentPage} / ${totalPages}`;
+    }
+    if (pageNumberInput) {
+        pageNumberInput.value = currentPage;
+    }
+    if (prevBtnEl) {
+        prevBtnEl.disabled = (currentPage <= 1);
+    }
+    if (nextBtnEl && pdfDoc) {
+        nextBtnEl.disabled = (currentPage >= pdfDoc.numPages);
     }
 }
 
+function prevPage() {
+    if (currentPage <= 1) return;
+    currentPage--;
+    queueRenderPage(currentPage);
+}
+
 function nextPage() {
-    if (currentPage < totalPages) {
-        currentPage++;
-        renderPage(currentPage);
+    if (!pdfDoc || currentPage >= pdfDoc.numPages) return;
+    currentPage++;
+    queueRenderPage(currentPage);
+}
+
+function queueRenderPage(num) {
+    if (pageRendering) {
+        pageNumPending = num;
+    } else {
+        renderPage(num);
     }
 }
 
 // Drag functionality
 const stamp = document.getElementById('tteStamp');
 let dragging = false;
+let startX, startY, startLeft, startTop;
 
-stamp.onmousedown = function(e) {
-    dragging = true;
-    e.preventDefault();
-};
+if (stamp) {
+    stamp.onmousedown = function(e) {
+        dragging = true;
+        
+        const rect = stamp.getBoundingClientRect();
+        const canvas = document.getElementById('pdfCanvas');
+        if (!canvas) return;
+        
+        const canvasRect = canvas.getBoundingClientRect();
+        
+        startLeft = rect.left - canvasRect.left;
+        startTop = rect.top - canvasRect.top;
+        startX = e.clientX;
+        startY = e.clientY;
+        
+        e.preventDefault();
+    };
+}
 
 document.onmousemove = function(e) {
     if (!dragging) return;
     
-    const container = document.getElementById('previewContainer');
-    const rect = container.getBoundingClientRect();
+    const canvas = document.getElementById('pdfCanvas');
+    if (!canvas) return;
     
-    let x = e.clientX - rect.left - 35; // Adjusted from 50 to 35 (half of 70px)
-    let y = e.clientY - rect.top - 35;  // Adjusted from 50 to 35
+    const rect = canvas.getBoundingClientRect();
     
-    x = Math.max(0, Math.min(x, rect.width - 70));  // Adjusted from 100 to 70
-    y = Math.max(0, Math.min(y, rect.height - 70)); // Adjusted from 100 to 70
+    const deltaX = e.clientX - startX;
+    const deltaY = e.clientY - startY;
     
-    const xp = (x / rect.width) * 100;
-    const yp = (y / rect.height) * 100;
+    let newLeft = startLeft + deltaX;
+    let newTop = startTop + deltaY;
+    
+    newLeft = Math.max(0, Math.min(newLeft, canvas.width - 100));
+    newTop = Math.max(0, Math.min(newTop, canvas.height - 100));
+    
+    const xp = (newLeft / canvas.width) * 100;
+    const yp = (newTop / canvas.height) * 100;
     
     updatePosition(xp, yp);
 };
@@ -676,24 +828,43 @@ document.onmouseup = function() {
 function updatePosition(x, y) {
     currentX = x;
     currentY = y;
-    stamp.style.left = x + '%';
-    stamp.style.top = y + '%';
-    document.getElementById('positionX').value = x.toFixed(2);
-    document.getElementById('positionY').value = y.toFixed(2);
-    document.getElementById('positionInfo').textContent = `X: ${x.toFixed(0)}% | Y: ${y.toFixed(0)}%`;
+    
+    const stamp = document.getElementById('tteStamp');
+    const positionXInput = document.getElementById('positionX');
+    const positionYInput = document.getElementById('positionY');
+    const positionInfoEl = document.getElementById('positionInfo');
+    
+    if (stamp) {
+        stamp.style.left = x + '%';
+        stamp.style.top = y + '%';
+    }
+    if (positionXInput) {
+        positionXInput.value = x.toFixed(2);
+    }
+    if (positionYInput) {
+        positionYInput.value = y.toFixed(2);
+    }
+    if (positionInfoEl) {
+        positionInfoEl.textContent = `X: ${x.toFixed(0)}% | Y: ${y.toFixed(0)}%`;
+    }
 }
 
 function switchMode(mode) {
     currentMode = mode;
 
-    document.getElementById('tabDrag').classList.remove('active');
-    document.getElementById('tabQuick').classList.remove('active');
+    const tabDrag = document.getElementById('tabDrag');
+    const tabQuick = document.getElementById('tabQuick');
+    const previewContainer = document.getElementById('previewContainer');
+    const quickPositionPanel = document.getElementById('quickPositionPanel');
+    
+    if (tabDrag) tabDrag.classList.remove('active');
+    if (tabQuick) tabQuick.classList.remove('active');
     
     if (mode === 'drag') {
-        document.getElementById('tabDrag').classList.add('active');
+        if (tabDrag) tabDrag.classList.add('active');
         if (currentFileType === 'pdf' && pdfDoc) {
-            document.getElementById('previewContainer').style.display = 'block';
-            document.getElementById('quickPositionPanel').style.display = 'none';
+            if (previewContainer) previewContainer.style.display = 'block';
+            if (quickPositionPanel) quickPositionPanel.style.display = 'none';
         } else if (currentFileType !== 'pdf') {
             Swal.fire({
                 icon: 'info',
@@ -703,19 +874,26 @@ function switchMode(mode) {
             switchMode('quick');
         }
     } else {
-        document.getElementById('tabQuick').classList.add('active');
-        if (currentFileType === 'pdf') {
-            document.getElementById('previewContainer').style.display = 'none';
+        if (tabQuick) tabQuick.classList.add('active');
+        if (currentFileType === 'pdf' && previewContainer) {
+            previewContainer.style.display = 'none';
         }
-        document.getElementById('quickPositionPanel').style.display = 'block';
+        if (quickPositionPanel) {
+            quickPositionPanel.style.display = 'block';
+        }
     }
 }
 
 function setQuickPosition(x, y) {
     currentX = x;
     currentY = y;
-    document.getElementById('positionX').value = x;
-    document.getElementById('positionY').value = y;
+    
+    const positionXInput = document.getElementById('positionX');
+    const positionYInput = document.getElementById('positionY');
+    
+    if (positionXInput) positionXInput.value = x;
+    if (positionYInput) positionYInput.value = y;
+    
     updatePosition(x, y);
     
     Swal.fire({
@@ -788,11 +966,7 @@ Swal.fire({
     cancelButtonText: '<i class="fas fa-times"></i> Tutup',
     confirmButtonColor: '#28a745',
     denyButtonColor: '#6777ef',
-    cancelButtonColor: '#6c757d',
-    customClass: {
-        popup: 'swal-wide',
-        htmlContainer: 'swal-compact'
-    }
+    cancelButtonColor: '#6c757d'
 }).then((result) => {
     if (result.isConfirmed) {
         const link = document.createElement('a');
@@ -826,4 +1000,4 @@ Swal.fire({
 </script>
 
 </body>
-</html>s
+</html>

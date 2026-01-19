@@ -2,11 +2,12 @@
 // ==========================================
 // SETUP DASAR
 // ==========================================
-error_reporting(E_ALL & ~E_NOTICE);
-ini_set('display_errors', 0);
+error_reporting(E_ALL & ~E_NOTICE & ~E_DEPRECATED);
+ini_set('display_errors', 1);
 date_default_timezone_set('Asia/Jakarta');
 
 include 'koneksi.php';
+require_once __DIR__ . '/tte_hash_helper.php';
 
 // ==========================================
 // HELPER: DOWNLOAD QR (AMAN UNTUK FPDF)
@@ -29,6 +30,21 @@ function downloadQr($url, $savePath)
         return file_exists($savePath);
     }
     return false;
+}
+
+// ==========================================
+// FUNCTION TTE
+// ==========================================
+function getTteByUser($conn, $user_id) {
+    if (empty($user_id)) return null;
+    $q = mysqli_query($conn, "
+        SELECT * FROM tte_user
+        WHERE user_id = '$user_id'
+          AND status = 'aktif'
+        ORDER BY created_at DESC
+        LIMIT 1
+    ");
+    return mysqli_fetch_assoc($q) ?: null;
 }
 
 // ==========================================
@@ -59,19 +75,16 @@ $file_pdf = $rootPath . '/dist/uploads/' . $surat['file_surat'];
 if (!file_exists($file_pdf)) die('File surat tidak ditemukan');
 
 // ==========================================
-// DATA DISPOSISI + TTE TERBARU
+// DATA DISPOSISI TERBARU + USER LOGIN
 // ==========================================
 $qDisp = mysqli_query($conn, "
     SELECT d.*,
            u.nama AS nama_user,
            u.jabatan AS jabatan_user,
-           t.nama AS nama_tte,
-           t.jabatan AS jabatan_tte,
-           t.token
+           u.nik AS nik_user,
+           u.id AS user_id
     FROM disposisi d
     JOIN users u ON d.disposisi_oleh = u.id
-    LEFT JOIN tte_user t 
-        ON t.user_id = u.id AND t.status='aktif'
     WHERE d.surat_masuk_id = '$id'
     ORDER BY d.tanggal_disposisi DESC
     LIMIT 1
@@ -86,23 +99,42 @@ if (!$disp) {
         'catatan' => '-',
         'nama_user' => '-',
         'jabatan_user' => '-',
-        'nama_tte' => null,
-        'jabatan_tte' => null,
-        'token' => null
+        'nik_user' => '-',
+        'user_id' => null
     ];
 }
 
 // ==========================================
-// GENERATE QR TTE KE TEMP
+// AMBIL TTE USER YANG MEMBUAT DISPOSISI
 // ==========================================
+$tte_disposisi = null;
 $qrFile = null;
-if (!empty($disp['token'])) {
-    $verifyUrl = "http://" . $_SERVER['HTTP_HOST'] . "/verify_tte.php?token=" . $disp['token'];
-    $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($verifyUrl);
 
-    $tmpQr = sys_get_temp_dir() . '/qr_' . md5($disp['token']) . '.png';
-    if (downloadQr($qrUrl, $tmpQr)) {
-        $qrFile = $tmpQr;
+if (!empty($disp['user_id'])) {
+    $tte_disposisi = getTteByUser($conn, $disp['user_id']);
+    
+    // Generate QR Code jika ada TTE
+    if ($tte_disposisi && !empty($tte_disposisi['token'])) {
+        $verifyUrl = "http://" . $_SERVER['HTTP_HOST'] . "/cek_tte.php?token=" . $tte_disposisi['token'];
+        $qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" . urlencode($verifyUrl);
+
+        // Try temp directory first
+        $tmpQr = sys_get_temp_dir() . '/qr_disp_' . md5($tte_disposisi['token']) . '.png';
+        
+        if (downloadQr($qrUrl, $tmpQr) && file_exists($tmpQr)) {
+            $qrFile = $tmpQr;
+        } else {
+            // Fallback: try uploads directory
+            $uploadDir = __DIR__ . '/uploads/temp/';
+            if (!is_dir($uploadDir)) {
+                @mkdir($uploadDir, 0755, true);
+            }
+            $tmpQr = $uploadDir . 'qr_disp_' . md5($tte_disposisi['token']) . '.png';
+            
+            if (downloadQr($qrUrl, $tmpQr) && file_exists($tmpQr)) {
+                $qrFile = $tmpQr;
+            }
+        }
     }
 }
 
@@ -176,33 +208,139 @@ $pdf->MultiCell($stampWidth, 6, $disp['catatan'] ?: '-', 1);
 // ===== TTE =====
 $tteY = $pdf->GetY();
 $pdf->SetX($stampX);
-$pdf->Cell(40, 30, '', 1);
-$pdf->Cell($stampWidth - 40, 30, '', 1, 1);
 
+// Cell untuk QR Code (kiri) dan Info (kanan)
+$qrCellX = $stampX;
+$qrCellWidth = 40;
+$infoCellWidth = $stampWidth - 40;
+
+// Draw border untuk kedua cell
+$pdf->Rect($qrCellX, $tteY, $qrCellWidth, 30);
+$pdf->Rect($qrCellX + $qrCellWidth, $tteY, $infoCellWidth, 30);
+
+// Tampilkan QR Code di cell kiri jika ada TTE
 if ($qrFile && file_exists($qrFile)) {
-    $pdf->Image($qrFile, $stampX + 5, $tteY + 4, 28);
+    // Posisi QR di tengah cell kiri
+    $qrSize = 28;
+    $qrX = $qrCellX + ($qrCellWidth - $qrSize) / 2;
+    $qrY = $tteY + 1;
+    
+    // Gunakan file yang sudah didownload
+    $pdf->Image($qrFile, $qrX, $qrY, $qrSize);
+} else {
+    // Jika tidak ada QR, tampilkan placeholder
+    $pdf->SetXY($qrCellX + 2, $tteY + 12);
+    $pdf->SetFont('Arial', 'I', 8);
+    $pdf->Cell($qrCellWidth - 4, 5, 'No TTE', 0, 0, 'C');
 }
 
-$pdf->SetXY($stampX + 45, $tteY + 6);
+// Info TTE di cell kanan
+$pdf->SetXY($qrCellX + $qrCellWidth + 2, $tteY + 6);
 $pdf->SetFont('Arial', 'I', 8);
-$pdf->MultiCell(
-    $stampWidth - 48,
-    5,
-    "Ditandatangani secara elektronik oleh:\n" .
-    ($disp['nama_tte'] ?: $disp['nama_user']) . "\n" .
-    ($disp['jabatan_tte'] ?: $disp['jabatan_user']) . "\n" .
-    (!empty($disp['token']) ? 'TTE Valid' : 'Tanpa TTE')
+
+if ($tte_disposisi) {
+    $pdf->MultiCell(
+        $infoCellWidth - 4,
+        4,
+        "Ditandatangani secara\nelektronik oleh:\n" .
+        $tte_disposisi['nama'] . "\n" .
+        $tte_disposisi['jabatan']
+    );
+} else {
+    $pdf->MultiCell(
+        $infoCellWidth - 4,
+        4,
+        "Ditandatangani oleh:\n" .
+        $disp['nama_user'] . "\n" .
+        $disp['jabatan_user'] . "\n" .
+        "(Tanpa TTE)"
+    );
+}
+
+// Update posisi Y setelah cell TTE
+$pdf->SetY($tteY + 30);
+
+// ===== FOOTER LEGAL DI HALAMAN YANG SAMA =====
+// Hitung sisa ruang di halaman
+$currentY = $pdf->GetY();
+$pageHeight = 297; // A4 height in mm
+$bottomMargin = 15;
+$footerHeight = 20;
+$footerStartY = $pageHeight - $bottomMargin - $footerHeight;
+
+// Jika posisi sekarang masih di atas area footer, pindah ke area footer
+if ($currentY < $footerStartY) {
+    $pdf->SetY($footerStartY);
+}
+
+$pdf->SetX(10);
+$pdf->SetFont('Arial', 'B', 8);
+$pdf->Cell(190, 4, 'Tanda Tangan Elektronik (TTE) Non Sertifikasi', 0, 1, 'C');
+
+$pdf->SetFont('Arial', '', 7);
+$pdf->SetX(10);
+$pdf->MultiCell(190, 3.5, 
+    "Dokumen ini menggunakan TTE Non Sertifikasi yang sah untuk penggunaan internal perusahaan sesuai Peraturan Pemerintah Nomor 71 Tahun 2019 tentang Penyelenggaraan Sistem dan Transaksi Elektronik dan Undang-Undang Nomor 11 Tahun 2008 jo. UU No. 19 Tahun 2016 tentang Informasi dan Transaksi Elektronik (ITE)",
+    0, 'C'
 );
 
-// ==========================================
-// OUTPUT
-// ==========================================
-if (ob_get_length()) ob_clean();
-$pdf->Output($mode === 'print' ? 'D' : 'I', "surat_disposisi_$id.pdf");
+$pdf->SetFont('Arial', 'I', 6);
+$pdf->SetX(10);
+$pdf->Cell(190, 3, 'Dokumen ini di-generate melalui aplikasi FixPoint - Smart Office Management System', 0, 1, 'C');
 
 // ==========================================
-// CLEANUP
+// EMBED TTE TOKEN DI PDF STREAM
+// ==========================================
+$pdf_output = $pdf->Output('S'); // Get as string
+
+if ($tte_disposisi && !empty($tte_disposisi['token'])) {
+    $token_text = "\nTTE-TOKEN:" . $tte_disposisi['token'] . "\n";
+    $pdf_output = str_replace('%%EOF', $token_text . '%%EOF', $pdf_output);
+}
+
+// ==========================================
+// SAVE & LOG TTE
+// ==========================================
+if ($tte_disposisi && !empty($tte_disposisi['token'])) {
+    $output_dir = __DIR__ . '/uploads/signed/';
+    if (!is_dir($output_dir)) {
+        @mkdir($output_dir, 0755, true);
+    }
+    
+    $filename = 'disposisi_' . $id . '_' . time() . '.pdf';
+    $filepath = $output_dir . $filename;
+    
+    // Save PDF
+    file_put_contents($filepath, $pdf_output);
+    
+    // Generate file hash
+    $file_hash = generateFileHash($filepath);
+    
+    // Log TTE
+    if ($file_hash) {
+        saveDocumentSigningLog($conn, $tte_disposisi['token'], $disp['user_id'], $filename, $file_hash);
+    }
+}
+
+// ==========================================
+// OUTPUT PDF TO BROWSER
+// ==========================================
+if (ob_get_length()) ob_clean();
+
+header('Content-Type: application/pdf');
+header('Content-Disposition: ' . ($mode === 'print' ? 'attachment' : 'inline') . '; filename="Surat_Disposisi_' . $id . '.pdf"');
+header('Cache-Control: private, max-age=0, must-revalidate');
+header('Pragma: public');
+header('Content-Length: ' . strlen($pdf_output));
+
+echo $pdf_output;
+
+// ==========================================
+// CLEANUP TEMP FILE
 // ==========================================
 if ($qrFile && file_exists($qrFile)) {
-    unlink($qrFile);
+    @unlink($qrFile);
 }
+
+exit;
+?>

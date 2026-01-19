@@ -109,6 +109,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_logbook'])) {
     }
 }
 
+// =======================
+// Data Log Book Anggota (Bawahan)
+// =======================
+$user_id = $_SESSION['user_id']; // atasan login
+
+$sqlLogAnggota = "
+    SELECT 
+        ck.id,
+        ck.judul,
+        ck.isi,
+        ck.tanggal,
+        u.nama AS nama_anggota,
+        u.jabatan,
+        u.unit_kerja
+    FROM catatan_kerja ck
+    JOIN users u ON ck.user_id = u.id
+    WHERE u.atasan_id = '$user_id'
+    ORDER BY ck.tanggal DESC
+";
+
+$resultLogAnggota = $conn->query($sqlLogAnggota);
+
+$dataLogAnggota = [];
+if ($resultLogAnggota) {
+    while ($row = $resultLogAnggota->fetch_assoc()) {
+        $dataLogAnggota[] = $row;
+    }
+}
 
 
 // Data Dokumen
@@ -225,6 +253,8 @@ if ($stmtLB) {
       </div>
     </div>
 
+
+
    <!-- Baris Kedua -->
 <div class="row">
 
@@ -250,6 +280,19 @@ if ($stmtLB) {
     </div>
   </div>
 
+
+  <!-- Tiket Sarpras -->
+  <div class="col-lg-3 col-md-6 col-sm-6 col-12">
+    <div class="card card-statistic-1" data-toggle="modal" data-target="#modalTiketSarpras">
+      <div class="card-icon bg-primary"><i class="fas fa-ticket-alt"></i></div>
+      <div class="card-wrap">
+        <div class="card-header"><h4>Log Book Anggota</h4></div>
+        <div class="card-body">Catatan</div>
+      </div>
+    </div>
+  </div>
+
+
    <div class="col-lg-3 col-md-6 col-sm-6 col-12">
   <div class="card card-statistic-1" data-toggle="modal" data-target="#modalTteSaya" style="cursor:pointer;">
     <div class="card-icon bg-primary">
@@ -271,6 +314,65 @@ if ($stmtLB) {
 
 
   </section>
+</div>
+
+
+<!-- Modal Log Book Anggota -->
+<div class="modal fade" id="modalTiketSarpras" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-xxl" role="document">
+    <div class="modal-content">
+
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-book-reader"></i> Log Book Anggota
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
+      </div>
+
+      <div class="modal-body table-responsive">
+        <table class="table table-bordered table-sm table-hover">
+          <thead class="thead-light">
+            <tr>
+              <th width="140">Tanggal</th>
+              <th>Nama Anggota</th>
+              <th>Jabatan</th>
+              <th>Judul</th>
+              <th>Isi Catatan</th>
+            </tr>
+          </thead>
+          <tbody>
+            <?php if (!empty($dataLogAnggota)): ?>
+              <?php foreach ($dataLogAnggota as $row): ?>
+                <tr>
+                  <td><?= date('d-m-Y H:i', strtotime($row['tanggal'])); ?></td>
+                  <td><?= htmlspecialchars($row['nama_anggota']); ?></td>
+                  <td>
+                    <?= htmlspecialchars($row['jabatan'] ?? '-'); ?><br>
+                    <small class="text-muted"><?= htmlspecialchars($row['unit_kerja'] ?? ''); ?></small>
+                  </td>
+                  <td><?= htmlspecialchars($row['judul']); ?></td>
+                  <td><?= nl2br(htmlspecialchars($row['isi'])); ?></td>
+                </tr>
+              <?php endforeach; ?>
+            <?php else: ?>
+              <tr>
+                <td colspan="5" class="text-center text-muted">
+                  Belum ada catatan kerja dari anggota
+                </td>
+              </tr>
+            <?php endif; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">
+          Tutup
+        </button>
+      </div>
+
+    </div>
+  </div>
 </div>
 
 

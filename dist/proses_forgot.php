@@ -1,124 +1,220 @@
 <?php
+// ===================================================
+// PHPMailer NAMESPACE (WAJIB DI PALING ATAS)
+// ===================================================
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+// ===================================================
+// DEBUG MODE
+// ===================================================
+define('DEBUG', true);
+error_reporting(E_ALL);
+ini_set('display_errors', DEBUG ? 1 : 0);
+ini_set('display_startup_errors', DEBUG ? 1 : 0);
+
+// ===================================================
+// SESSION + TIMEZONE (INI KUNCI MASALAH)
+// ===================================================
 session_start();
+date_default_timezone_set('Asia/Jakarta'); // 🔥 WAJIB
+
 require 'koneksi.php';
 
-// ===== CSRF TOKEN VALIDATION =====
-if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
-    echo "<script>alert('Invalid security token. Silakan muat ulang halaman.'); window.location='login.php';</script>";
+// ===================================================
+// VALIDASI CSRF
+// ===================================================
+if (
+    !isset($_POST['csrf_token'], $_SESSION['csrf_token']) ||
+    $_POST['csrf_token'] !== $_SESSION['csrf_token']
+) {
+    $_SESSION['forgot_error'] = "Token keamanan tidak valid.";
+    header("Location: login.php");
     exit;
 }
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $email = trim($_POST['email']);
-    
-    // ===== VALIDASI EMAIL =====
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-        echo "<script>alert('Format email tidak valid.'); history.back();</script>";
-        exit;
-    }
-    
-    // ===== CEK EMAIL DI DATABASE =====
-    $stmt = $conn->prepare("SELECT id, nama, status FROM users WHERE email = ?");
-    $stmt->bind_param("s", $email);
-    $stmt->execute();
-    $stmt->store_result();
-    
-    if ($stmt->num_rows === 1) {
-        $stmt->bind_result($user_id, $nama, $status);
-        $stmt->fetch();
-        
-        // Cek status user
-        if ($status != 'active') {
-            // Jangan kasih tahu detail, pakai generic message
-            echo "<script>alert('Permintaan reset password telah dikirim ke email Anda (jika terdaftar).'); window.location='login.php';</script>";
-            exit;
-        }
-        
-        // ===== GENERATE RESET TOKEN =====
-        $token = bin2hex(random_bytes(32));
-        $expires_at = date('Y-m-d H:i:s', strtotime('+1 hour')); // Token berlaku 1 jam
-        
-        // ===== SIMPAN TOKEN KE DATABASE =====
-        $insert = $conn->prepare("INSERT INTO password_resets (email, token, expires_at) VALUES (?, ?, ?)");
-        $insert->bind_param("sss", $email, $token, $expires_at);
-        
-        if ($insert->execute()) {
-            // ===== KIRIM EMAIL (Customize sesuai mail server Anda) =====
-            
-            // Opsi 1: Menggunakan PHP mail()
-            $reset_link = "https://yourdomain.com/reset_password.php?token=$token";
-            $subject = "Reset Password - FixPoint";
-            $message = "Halo $nama,\n\n";
-            $message .= "Anda menerima email ini karena ada permintaan reset password untuk akun Anda.\n\n";
-            $message .= "Klik link berikut untuk reset password:\n";
-            $message .= "$reset_link\n\n";
-            $message .= "Link ini akan kadaluarsa dalam 1 jam.\n\n";
-            $message .= "Jika Anda tidak meminta reset password, abaikan email ini.\n\n";
-            $message .= "Terima kasih,\nTim FixPoint";
-            
-            $headers = "From: noreply@yourdomain.com\r\n";
-            $headers .= "Reply-To: support@yourdomain.com\r\n";
-            $headers .= "X-Mailer: PHP/" . phpversion();
-            
-            // Uncomment jika mail server sudah dikonfigurasi
-            // mail($email, $subject, $message, $headers);
-            
-            // ===== LOG ACTIVITY =====
-            $ip_address = $_SERVER['REMOTE_ADDR'];
-            $user_agent = $_SERVER['HTTP_USER_AGENT'] ?? 'Unknown';
-            
-            $log = $conn->prepare("INSERT INTO activity_log (user_id, action, description, ip_address, user_agent) VALUES (?, 'forgot_password', 'Request reset password', ?, ?)");
-            if ($log) {
-                $log->bind_param("iss", $user_id, $ip_address, $user_agent);
-                $log->execute();
-                $log->close();
-            }
-            
-            // ===== TELEGRAM NOTIFICATION (Optional) =====
-            $token_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT nilai FROM setting WHERE nama = 'telegram_bot_token' LIMIT 1"));
-            $chatid_row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT nilai FROM setting WHERE nama = 'telegram_chat_id' LIMIT 1"));
-            
-            if ($token_row && $chatid_row) {
-                $tg_token = $token_row['nilai'];
-                $chat_id = $chatid_row['nilai'];
-                
-                $pesan = "🔐 <b>PERMINTAAN RESET PASSWORD</b>\n\n";
-                $pesan .= "👤 <b>Nama:</b> " . htmlspecialchars($nama) . "\n";
-                $pesan .= "✉️ <b>Email:</b> " . htmlspecialchars($email) . "\n";
-                $pesan .= "🌐 <b>IP:</b> $ip_address\n";
-                $pesan .= "⏰ <b>Waktu:</b> " . date('Y-m-d H:i:s') . "\n";
-                
-                $url = "https://api.telegram.org/bot$tg_token/sendMessage";
-                $data = [
-                    'chat_id' => $chat_id,
-                    'text' => $pesan,
-                    'parse_mode' => 'HTML'
-                ];
-                
-                $ch = curl_init();
-                curl_setopt($ch, CURLOPT_URL, $url);
-                curl_setopt($ch, CURLOPT_POST, true);
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-                curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-                curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-                curl_exec($ch);
-                curl_close($ch);
-            }
-        }
-        
-        $insert->close();
-    }
-    
-    // ===== GENERIC MESSAGE (Keamanan) =====
-    // Selalu tampilkan pesan sukses meskipun email tidak ditemukan
-    // Ini mencegah attacker tahu email mana yang terdaftar
-    echo "<script>
-        alert('Jika email terdaftar, link reset password telah dikirim ke email Anda.');
-        window.location='login.php';
-    </script>";
-    
-    $stmt->close();
+// ===================================================
+// PROSES POST
+// ===================================================
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: login.php");
+    exit;
 }
 
-$conn->close();
-?>
+$email = trim($_POST['email'] ?? '');
+
+if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+    $_SESSION['forgot_error'] = "Format email tidak valid.";
+    header("Location: login.php");
+    exit;
+}
+
+// ===================================================
+// CEK USER
+// ===================================================
+$stmt = $conn->prepare("SELECT id, nama, email, status FROM users WHERE email = ?");
+$stmt->bind_param("s", $email);
+$stmt->execute();
+$stmt->store_result();
+
+if ($stmt->num_rows !== 1) {
+    $_SESSION['forgot_success'] = "Jika email terdaftar, OTP akan dikirim.";
+    header("Location: verify_otp.php");
+    exit;
+}
+
+$stmt->bind_result($user_id, $nama, $user_email, $status);
+$stmt->fetch();
+$stmt->close();
+
+if ($status !== 'active') {
+    $_SESSION['forgot_error'] = "Akun belum aktif.";
+    header("Location: login.php");
+    exit;
+}
+
+// ===================================================
+// 🔐 GENERATE OTP (FIX TIMEZONE)
+// ===================================================
+$otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+
+// ❌ JANGAN pakai strtotime('+10 minutes')
+// ✅ PAKAI time()
+$expires_at = date('Y-m-d H:i:s', time() + 600); // 10 menit
+
+$insert = $conn->prepare("
+    INSERT INTO password_resets (email, token, expires_at, used)
+    VALUES (?, ?, ?, 0)
+");
+$insert->bind_param("sss", $email, $otp, $expires_at);
+$insert->execute();
+$insert->close();
+
+// ===================================================
+// KIRIM EMAIL
+// ===================================================
+// ===================================================
+// KIRIM EMAIL (VERSI PROFESIONAL)
+// ===================================================
+$email_sent = false;
+
+require_once 'PHPMailer/src/PHPMailer.php';
+require_once 'PHPMailer/src/SMTP.php';
+require_once 'PHPMailer/src/Exception.php';
+
+$mail_setting = mysqli_fetch_assoc(
+    mysqli_query($conn, "SELECT * FROM mail_settings LIMIT 1")
+);
+
+if ($mail_setting) {
+    try {
+        $mail = new PHPMailer(true);
+        $mail->isSMTP();
+        $mail->Host       = $mail_setting['mail_host'];
+        $mail->SMTPAuth   = true;
+        $mail->Username   = $mail_setting['mail_username'];
+        $mail->Password   = $mail_setting['mail_password'];
+        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->Port       = $mail_setting['mail_port'];
+        $mail->CharSet    = 'UTF-8';
+
+        // Pengirim & Penerima
+        $mail->setFrom(
+            $mail_setting['mail_from_email'],
+            'FixPoint Smart Office Management System'
+        );
+        $mail->addAddress($user_email, $nama);
+
+        // Format Email
+        $mail->isHTML(true);
+        $mail->Subject = "Kode Verifikasi Reset Password – FixPoint";
+
+        // ================= ISI EMAIL =================
+        $mail->Body = "
+        <div style='font-family:Arial,Helvetica,sans-serif;
+                    background:#f4f6f8;
+                    padding:30px;'>
+
+          <div style='max-width:600px;
+                      margin:auto;
+                      background:#ffffff;
+                      border-radius:10px;
+                      overflow:hidden;'>
+
+            <div style='background:#4f46e5;
+                        color:#ffffff;
+                        padding:20px;
+                        text-align:center;'>
+              <h2 style='margin:0;'>FixPoint</h2>
+              <p style='margin:5px 0 0;'>Smart Office Management System</p>
+            </div>
+
+            <div style='padding:30px; color:#333;'>
+              <p>Yth. <strong>$nama</strong>,</p>
+
+              <p>
+                Kami menerima permintaan untuk melakukan <strong>reset password</strong>
+                pada akun FixPoint Anda.
+              </p>
+
+              <p>
+                Silakan gunakan <strong>Kode OTP</strong> berikut untuk melanjutkan proses:
+              </p>
+
+              <div style='text-align:center;
+                          margin:30px 0;
+                          font-size:32px;
+                          font-weight:bold;
+                          letter-spacing:6px;
+                          color:#4f46e5;'>
+                $otp
+              </div>
+
+              <p>
+                Kode ini <strong>berlaku selama 10 menit</strong> sejak email ini dikirim.
+              </p>
+
+              <p style='color:#555;'>
+                Jika Anda tidak merasa melakukan permintaan reset password,
+                silakan abaikan email ini. Tidak ada perubahan yang akan dilakukan
+                pada akun Anda.
+              </p>
+
+              <hr style='margin:30px 0;'>
+
+              <p style='font-size:13px; color:#888;'>
+                Email ini dikirim secara otomatis oleh sistem FixPoint.
+                Mohon tidak membalas email ini.
+              </p>
+            </div>
+          </div>
+        </div>
+        ";
+
+        // Versi teks (fallback)
+        $mail->AltBody =
+            "FixPoint - Reset Password\n\n" .
+            "Kode OTP Anda: $otp\n" .
+            "Berlaku selama 10 menit.\n\n" .
+            "Jika Anda tidak merasa melakukan permintaan ini, abaikan email ini.";
+
+        $mail->send();
+        $email_sent = true;
+
+    } catch (Exception $e) {
+        error_log("EMAIL OTP ERROR: " . $e->getMessage());
+    }
+}
+
+
+// ===================================================
+// SESSION RESULT
+// ===================================================
+$_SESSION['forgot_success'] = $email_sent
+    ? "📧 OTP telah dikirim ke email Anda."
+    : "OTP Anda: <strong>$otp</strong>";
+
+$_SESSION['reset_email'] = $email;
+
+header("Location: verify_otp.php");
+exit;

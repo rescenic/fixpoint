@@ -386,6 +386,34 @@ try {
         </li>
         <?php endif; ?>
 
+       <?php if (in_array('bubuhkan_stampel.php', $allowed_files)): ?>
+        <li>
+          <a class="nav-link" href="bubuhkan_stampel.php">
+            <i class="fas fa-stamp"></i>
+            <span>Stempel Dokumen</span>
+          </a>
+        </li>
+        <?php endif; ?>
+
+        <?php if (in_array('cek_stampel.php', $allowed_files)): ?>
+        <li>
+          <a class="nav-link" href="cek_stampel.php">
+            <i class="fas fa-certificate"></i>
+            <span>Cek E-Stemp</span>
+          </a>
+        </li>
+        <?php endif; ?>
+
+        <?php if (in_array('buat_stampel.php', $allowed_files)): ?>
+        <li>
+          <a class="nav-link" href="buat_stampel.php">
+            <i class="fas fa-file-signature"></i>
+            <span>Generate E-Stemp</span>
+          </a>
+        </li>
+        <?php endif; ?>
+
+
       </ul>
     </li>
 
@@ -406,6 +434,68 @@ try {
       </ul>
     </li>
 <?php endif; ?>
+
+
+<li class="menu-header">BUAT DOKUMEN / SURAT</li>
+
+<li class="dropdown">
+  <a href="#" class="nav-link has-dropdown">
+    <i class="fas fa-file-signature"></i>
+    <span>BUAT DOKUMEN</span>
+  </a>
+
+  <ul class="dropdown-menu">
+
+    <?php if (in_array('spo.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="spo.php">
+        <i class="fas fa-file-medical"></i>
+        <span>SPO</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+    <?php if (in_array('rapat_bulanan.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="rapat_bulanan.php">
+        <i class="fas fa-calendar-check"></i>
+        <span>Rapat Bulanan</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+    <?php if (in_array('surat_edaran.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="surat_edaran.php">
+        <i class="fas fa-bullhorn"></i>
+        <span>Surat Edaran</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+    <?php if (in_array('pemberitahuan.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="pemberitahuan.php">
+        <i class="fas fa-bell"></i>
+        <span>Pemberitahuan</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+
+
+       <?php if (in_array('master_no_surat.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="master_no_surat.php">
+        <i class="fas fa-chalkboard-teacher"></i>
+        <span>Laporan Surat/SPO</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+  </ul>
+</li>
+
 
 
 <li class="menu-header">IT DEPARTEMEN</li>
@@ -728,6 +818,8 @@ try {
   </ul>
 </li>
 
+
+
 <!-- KESEKTARIATAN -->
 <li class="menu-header">KESEKTARIATAN</li>
 <li class="dropdown">
@@ -740,6 +832,14 @@ try {
     <li>
       <a class="nav-link" href="surat_masuk.php">
         <i class="fas fa-envelope-open-text"></i> <span>Surat Masuk</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+       <?php if (in_array('disposisi.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="disposisi.php">
+        <i class="fas fa-envelope-open-text"></i> <span>Disposisi Surat</span>
       </a>
     </li>
     <?php endif; ?>

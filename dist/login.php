@@ -1,5 +1,5 @@
 <?php
-// ===== SECURITY HEADERS =====
+
 header("X-Frame-Options: DENY");
 header("X-Content-Type-Options: nosniff");
 header("X-XSS-Protection: 1; mode=block");
@@ -73,7 +73,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
                 $notif = "Email dan Password tidak boleh kosong.";
                 recordLoginAttempt($ip_address, $email, 0, $conn);
             } elseif ($captcha_input === "" || $captcha_input !== $captcha_session) {
-                $notif = "Kode keamanan salah atau kosong.";
+                $notif = "🔐 Captcha yang Anda masukkan salah. Silakan coba lagi.";
                 recordLoginAttempt($ip_address, $email, 0, $conn);
             } else {
                 // Email validation
@@ -91,8 +91,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
                         $stmt->fetch();
                         
                         if ($status != 'active') {
-                            // Generic message untuk keamanan
-                            $notif = "Login gagal. Periksa kredensial Anda.";
+                            // Pesan spesifik untuk akun belum aktif
+                            $notif = "⏳ Akun belum diaktifkan oleh admin. Silakan hubungi 0821-7784-6209.";
                             recordLoginAttempt($ip_address, $email, 0, $conn);
                         } elseif (password_verify($password, $password_hash)) {
                             // ===== SUCCESSFUL LOGIN =====
@@ -120,13 +120,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
                             header("Location: dashboard.php");
                             exit;
                         } else {
-                            // Generic message
-                            $notif = "Login gagal. Periksa kredensial Anda.";
+                            // Password salah
+                            $notif = "🔑 Password yang Anda masukkan salah.";
                             recordLoginAttempt($ip_address, $email, 0, $conn);
                         }
                     } else {
-                        // Generic message
-                        $notif = "Login gagal. Periksa kredensial Anda.";
+                        // Email belum terdaftar
+                        $notif = "📧 Akun/Email belum terdaftar.";
                         recordLoginAttempt($ip_address, $email, 0, $conn);
                     }
                 }
@@ -167,8 +167,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
+      padding: 15px;
       backdrop-filter: blur(6px);
       -webkit-backdrop-filter: blur(6px);
     }
@@ -181,12 +182,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
       box-shadow: 0 8px 30px rgba(0,0,0,0.25);
       width: 100%;
       max-width: 700px;
-      animation: fadeIn 0.8s ease;
+      animation: fadeIn 0.5s ease-out;
+      position: relative;
+      z-index: 1;
+      margin: auto;
     }
 
     @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(-20px); }
+      from { opacity: 0; transform: translateY(-10px); }
       to { opacity: 1; transform: translateY(0); }
+    }
+    
+    /* Mencegah SweetAlert shake effect */
+    .swal2-no-shake {
+      animation: none !important;
+    }
+    
+    .swal2-noanimation {
+      animation: swal2-show 0.2s !important;
+    }
+    
+    /* PENTING: Mencegah body dan form bergeser saat SweetAlert muncul */
+    body.swal2-shown:not(.swal2-no-backdrop):not(.swal2-toast-shown) {
+      padding-right: 0 !important;
+      overflow-y: auto !important;
+    }
+    
+    body.swal2-height-auto {
+      height: 100vh !important;
     }
 
     .login-logo img {
@@ -235,8 +258,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
         Swal.fire({
           icon: 'error',
           title: 'Login Gagal',
-          text: <?= json_encode($notif) ?>,
-          confirmButtonColor: '#d33'
+          html: <?= json_encode($notif) ?>,
+          confirmButtonColor: '#6777ef',
+          confirmButtonText: 'OK',
+          backdrop: true,
+          allowOutsideClick: true,
+          heightAuto: false,
+          showClass: {
+            popup: 'swal2-noanimation'
+          },
+          hideClass: {
+            popup: ''
+          },
+          customClass: {
+            popup: 'swal2-no-shake'
+          }
         });
       });
     </script>
@@ -414,7 +450,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
         </div>
       </div>
       <div class="modal-footer">
-        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane mr-1"></i> Kirim Link Reset</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-paper-plane mr-1"></i> Minta OTP</button>
         <button type="button" class="btn btn-secondary" data-dismiss="modal">Batal</button>
       </div>
     </form>

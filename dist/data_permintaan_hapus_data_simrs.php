@@ -23,39 +23,55 @@ if ($result->num_rows == 0) {
     exit;
 }
 
-
 // === UPDATE STATUS ===
 if (isset($_POST['update_status'])) {
-    $id     = $_POST['id'];
-    $status = $_POST['status'];
+    $id     = intval($_POST['id']);
+    $status = mysqli_real_escape_string($conn, $_POST['status']);
+    $catatan_admin = mysqli_real_escape_string($conn, $_POST['catatan_admin']);
 
     $waktu_update = date('Y-m-d H:i:s');
     $admin_nama   = $_SESSION['nama'] ?? 'Administrator';
 
-    $conn->query("
-        UPDATE permintaan_hapus_data 
-        SET status='$status', updated_status_at='$waktu_update', updated_by='$admin_nama'
-        WHERE id='$id'
-    ");
-
-    $_SESSION['flash_message'] = "✔ Status berhasil diperbarui menjadi <b>$status</b>.";
+    $query = "UPDATE permintaan_hapus_data 
+              SET status='$status', 
+                  updated_status_at='$waktu_update', 
+                  updated_by='$admin_nama',
+                  catatan_admin='$catatan_admin'
+              WHERE id='$id'";
+    
+    if ($conn->query($query)) {
+        $_SESSION['flash_message'] = "Status berhasil diperbarui menjadi <strong>$status</strong>";
+        $_SESSION['flash_type'] = "success";
+    } else {
+        $_SESSION['flash_message'] = "Gagal mengupdate status: " . $conn->error;
+        $_SESSION['flash_type'] = "danger";
+    }
+    
     echo "<script>location.href='data_permintaan_hapus_data_simrs.php';</script>";
     exit;
 }
 
+// === FILTER STATUS ===
+$filterStatus = $_GET['filter_status'] ?? '';
+$whereFilter = "";
+if ($filterStatus) {
+    $whereFilter = "WHERE status = '" . mysqli_real_escape_string($conn, $filterStatus) . "'";
+}
 
 // === PAGINATION SETTING ===
 $limit = 10;
 $page  = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
 $start = ($page - 1) * $limit;
 
-$totalQuery = $conn->query("SELECT COUNT(*) AS total FROM permintaan_hapus_data");
+$totalQuery = $conn->query("SELECT COUNT(*) AS total FROM permintaan_hapus_data $whereFilter");
 $totalData  = $totalQuery->fetch_assoc()['total'];
 $totalPages = ceil($totalData / $limit);
 
-
 // === LOAD DATA WITH PAGINATION ===
-$data = $conn->query("SELECT * FROM permintaan_hapus_data ORDER BY id DESC LIMIT $start,$limit");
+$data = $conn->query("SELECT * FROM permintaan_hapus_data $whereFilter ORDER BY id DESC LIMIT $start,$limit");
+
+
 
 ?>
 
@@ -63,7 +79,8 @@ $data = $conn->query("SELECT * FROM permintaan_hapus_data ORDER BY id DESC LIMIT
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Data Permintaan Hapus Data</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Data Permintaan Hapus Data SIMRS</title>
 
 <link rel="stylesheet" href="assets/modules/bootstrap/css/bootstrap.min.css">
 <link rel="stylesheet" href="assets/modules/fontawesome/css/all.min.css">
@@ -71,27 +88,97 @@ $data = $conn->query("SELECT * FROM permintaan_hapus_data ORDER BY id DESC LIMIT
 <link rel="stylesheet" href="assets/css/components.css">
 
 <style>
-.flash-center{
-    position:fixed; top:15%; left:50%; transform:translate(-50%, -50%);
-    padding:10px 20px; background:#28a745; color:white; border-radius:6px;
-    font-weight:bold; z-index:999999;
+.flash-center {
+    position: fixed;
+    top: 20%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    min-width: 300px;
+    max-width: 90%;
+    text-align: center;
+    padding: 15px;
+    border-radius: 8px;
+    font-weight: 500;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
 }
 
-/* ---- scroll kanan jika data panjang ---- */
+.stats-card {
+    text-align: center;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    transition: transform 0.3s;
+}
+
+.stats-card:hover {
+    transform: translateY(-5px);
+}
+
+.stats-icon {
+    font-size: 40px;
+    margin-bottom: 10px;
+}
+
+.stats-number {
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.stats-label {
+    font-size: 14px;
+    color: #666;
+    font-weight: 600;
+}
+
 .table-scroll {
     overflow-x: auto;
     white-space: nowrap;
 }
 
 .table td {
-    white-space: nowrap;
+    vertical-align: middle;
+}
+
+.small-text {
+    font-size: 11px;
+    color: #666;
 }
 
 /* Modal fix */
-.modal-backdrop { z-index:1040!important; }
-.modal { z-index:1050!important; }
+.modal-backdrop {
+    z-index: 1040 !important;
+}
 
-.small-text { font-size:10px; color:#666; }
+.modal {
+    z-index: 1050 !important;
+}
+
+.modal-dialog-centered {
+    display: flex;
+    align-items: center;
+    min-height: calc(100% - 3.5rem);
+}
+
+.filter-card {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+
+.pagination-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.pagination-info {
+    font-size: 14px;
+    color: #000;
+    font-weight: 500;
+}
 </style>
 </head>
 <body>
@@ -103,141 +190,287 @@ $data = $conn->query("SELECT * FROM permintaan_hapus_data ORDER BY id DESC LIMIT
 <?php include 'sidebar.php'; ?>
 
 <div class="main-content">
-<section class="section"><div class="section-body">
+<section class="section">
+<div class="section-body">
 
 <!-- Flash -->
-<?php if(isset($_SESSION['flash_message'])){ ?>
-<div class="flash-center" id="flashMsg"><?= $_SESSION['flash_message']; ?></div>
+<?php if(isset($_SESSION['flash_message'])): 
+    $flashType = $_SESSION['flash_type'] ?? 'info';
+?>
+<div class="alert alert-<?= $flashType ?> flash-center" id="flashMsg">
+    <i class="fas fa-<?= $flashType=='success'?'check-circle':($flashType=='danger'?'exclamation-circle':'info-circle') ?>"></i>
+    <?= $_SESSION['flash_message']; ?>
+</div>
 <script>setTimeout(()=>{document.getElementById('flashMsg').style.display='none';},3000);</script>
-<?php unset($_SESSION['flash_message']); } ?>
+<?php 
+    unset($_SESSION['flash_message']); 
+    unset($_SESSION['flash_type']); 
+endif; 
+?>
+
 
 
 <div class="card">
-<div class="card-header"><h4>📁 Data Permintaan Hapus Data SIMRS</h4></div>
+<div class="card-header">
+    <h4><i class="fas fa-list"></i> Data Permintaan Hapus Data SIMRS</h4>
+</div>
 
-<div class="card-body table-scroll">
+<div class="card-body">
 
+<!-- Filter -->
+<div class="filter-card">
+    <form method="GET" class="form-inline">
+        <label class="mr-2"><i class="fas fa-filter"></i> Filter Status:</label>
+        <select name="filter_status" class="form-control mr-2" onchange="this.form.submit()">
+            <option value="">-- Semua Status --</option>
+            <option value="Menunggu" <?= ($filterStatus=='Menunggu')?'selected':'' ?>>Menunggu</option>
+            <option value="Diproses" <?= ($filterStatus=='Diproses')?'selected':'' ?>>Diproses</option>
+            <option value="Disetujui" <?= ($filterStatus=='Disetujui')?'selected':'' ?>>Disetujui</option>
+            <option value="Ditolak" <?= ($filterStatus=='Ditolak')?'selected':'' ?>>Ditolak</option>
+            <option value="Selesai" <?= ($filterStatus=='Selesai')?'selected':'' ?>>Selesai</option>
+        </select>
+        <?php if ($filterStatus): ?>
+        <a href="data_permintaan_hapus_data_simrs.php" class="btn btn-secondary btn-sm">
+            <i class="fas fa-redo"></i> Reset
+        </a>
+        <?php endif; ?>
+    </form>
+</div>
+
+<div class="table-responsive table-scroll">
 <table class="table table-bordered table-hover table-sm">
-<thead class="text-center bg-dark text-white">
+<thead class="text-center bg-primary text-white">
 <tr>
-<th>No</th>
-<th>Nama</th>
-<th>Jabatan</th>
-<th>Unit</th>
-<th>Kronologi</th>
-<th>Tanggal</th>
-<th>Status</th>
-<th>Update Terakhir</th>
-<th>Aksi</th>
+    <th width="40">No</th>
+    <th width="150">No. Surat</th>
+    <th>Nama Pemohon</th>
+    <th>Jabatan</th>
+    <th>Unit</th>
+    <th>Data Terkait</th>
+    <th>Alasan</th>
+    <th width="100">Tanggal</th>
+    <th width="100">Status</th>
+    <th width="150">Update Terakhir</th>
+    <th width="100">Aksi</th>
 </tr>
 </thead>
 
 <tbody>
 <?php 
-$no=$start+1;
-while($row = $data->fetch_assoc()):
+$no = $start + 1;
+if (mysqli_num_rows($data) > 0):
+    while($row = $data->fetch_assoc()):
 ?>
 
 <tr>
-<td><?= $no++; ?></td>
-<td><?= $row['nama']; ?></td>
-<td><?= $row['jabatan']; ?></td>
-<td><?= $row['unit_kerja']; ?></td>
-<td><?= str_replace(["\n","\r"]," ", $row['kronologi']); ?></td>
-<td><?= $row['tanggal']; ?></td>
+    <td class="text-center"><?= $no++; ?></td>
+    <td><strong><?= htmlspecialchars($row['nomor_surat']); ?></strong></td>
+    <td><?= htmlspecialchars($row['nama']); ?></td>
+    <td><?= htmlspecialchars($row['jabatan']); ?></td>
+    <td><?= htmlspecialchars($row['unit_kerja']); ?></td>
+    <td><?= htmlspecialchars($row['data_terkait'] ?? '-'); ?></td>
+    <td><?= htmlspecialchars($row['alasan'] ?? '-'); ?></td>
+    <td class="text-center small-text"><?= date('d/m/Y', strtotime($row['tanggal'])); ?></td>
 
-<td class="text-center">
-<?php
-$color = [
-"Menunggu"=>"warning",
-"Diproses"=>"primary",
-"Ditolak"=>"danger",
-"Selesai"=>"success"
-][$row['status']];
-?>
-<span class="badge badge-<?= $color ?>"><?= $row['status']; ?></span>
-</td>
+    <td class="text-center">
+    <?php
+    $statusConfig = [
+        "Menunggu" => ["badge-warning", "hourglass-half"],
+        "Diproses" => ["badge-primary", "cog"],
+        "Disetujui" => ["badge-info", "check"],
+        "Ditolak"  => ["badge-danger", "times"],
+        "Selesai"  => ["badge-success", "check-circle"]
+    ];
+    $config = $statusConfig[$row['status']] ?? ["badge-secondary", "question"];
+    ?>
+    <span class="badge <?= $config[0] ?>">
+        <i class="fas fa-<?= $config[1] ?>"></i> <?= $row['status']; ?>
+    </span>
+    </td>
 
-<td class="small-text">
-<?= $row['updated_status_at'] ? 
-"<b>".date('d-m-Y H:i',strtotime($row['updated_status_at']))."</b><br><i>oleh ".$row['updated_by']."</i>" 
-: "<i>- belum pernah diubah -</i>"; ?>
-</td>
+    <td class="small-text">
+    <?= $row['updated_status_at'] ? 
+    "<b>".date('d/m/Y H:i',strtotime($row['updated_status_at']))."</b><br><i>oleh ".htmlspecialchars($row['updated_by'])."</i>" 
+    : "<i class='text-muted'>- belum ada update -</i>"; ?>
+    </td>
 
-<td class="text-center">
-    <button class="btn btn-sm btn-info"
-        onclick="openModal(
-            '<?= $row['id']; ?>',
-            '<?= $row['status']; ?>',
-            `<?= htmlspecialchars($row['kronologi'], ENT_QUOTES); ?>`,
-            '<?= $row['nama']; ?>'
-        )">
-        <i class="fas fa-edit"></i>
-    </button>
-</td>
-
+    <td class="text-center">
+        <button class="btn btn-sm btn-info"
+            onclick="openModal(
+                '<?= $row['id']; ?>',
+                '<?= htmlspecialchars($row['status']); ?>',
+                `<?= htmlspecialchars($row['kronologi'], ENT_QUOTES); ?>`,
+                '<?= htmlspecialchars($row['nama']); ?>',
+                '<?= htmlspecialchars($row['nomor_surat']); ?>',
+                '<?= htmlspecialchars($row['data_terkait'] ?? ''); ?>',
+                '<?= htmlspecialchars($row['alasan'] ?? ''); ?>',
+                `<?= htmlspecialchars($row['catatan_admin'] ?? '', ENT_QUOTES); ?>`
+            )"
+            title="Update Status">
+            <i class="fas fa-edit"></i>
+        </button>
+        <a href="print_hapus_data.php?id=<?= $row['id']; ?>" 
+           target="_blank" 
+           class="btn btn-sm btn-secondary"
+           title="Cetak">
+            <i class="fas fa-print"></i>
+        </a>
+    </td>
 </tr>
-<?php endwhile; ?>
+<?php 
+    endwhile;
+else:
+?>
+<tr>
+    <td colspan="11" class="text-center">
+        <i class="fas fa-inbox fa-3x text-muted mb-3"></i><br>
+        Tidak ada data permintaan
+    </td>
+</tr>
+<?php endif; ?>
 </tbody>
 </table>
+</div>
 
-<br>
+<!-- Pagination -->
+<?php if ($totalPages > 1): ?>
+<div class="pagination-wrapper">
+    <div class="pagination-info">
+        Menampilkan <?= $start + 1 ?> - <?= min($start + $limit, $totalData) ?> dari <?= $totalData ?> data
+    </div>
+    <nav>
+        <ul class="pagination mb-0">
+            <li class="page-item <?= ($page <= 1) ? 'disabled' : '' ?>">
+                <a class="page-link" href="?page=<?= $page - 1 ?><?= $filterStatus?"&filter_status=$filterStatus":'' ?>">
+                    <span>&laquo;</span>
+                </a>
+            </li>
 
-<!-- PAGINATION -->
-<nav>
-<ul class="pagination justify-content-center">
-<?php for($i=1;$i<=$totalPages;$i++): ?>
-<li class="page-item <?= $i==$page ? 'active':'' ?>">
-<a class="page-link" href="?page=<?= $i ?>"><?= $i ?></a>
-</li>
-<?php endfor; ?>
-</ul>
-</nav>
+            <?php
+            $start_page = max(1, $page - 2);
+            $end_page = min($totalPages, $page + 2);
 
-</div></div>
+            if($start_page > 1): ?>
+                <li class="page-item"><a class="page-link" href="?page=1<?= $filterStatus?"&filter_status=$filterStatus":'' ?>">1</a></li>
+                <?php if($start_page > 2): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php endif;
+            endif;
 
-</div></section>
+            for($i = $start_page; $i <= $end_page; $i++): ?>
+                <li class="page-item <?= ($i == $page) ? 'active' : '' ?>">
+                    <a class="page-link" href="?page=<?= $i ?><?= $filterStatus?"&filter_status=$filterStatus":'' ?>"><?= $i ?></a>
+                </li>
+            <?php endfor;
+
+            if($end_page < $totalPages): 
+                if($end_page < $totalPages - 1): ?>
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                <?php endif; ?>
+                <li class="page-item"><a class="page-link" href="?page=<?= $totalPages ?><?= $filterStatus?"&filter_status=$filterStatus":'' ?>"><?= $totalPages ?></a></li>
+            <?php endif; ?>
+
+            <li class="page-item <?= ($page >= $totalPages) ? 'disabled' : '' ?>">
+                <a class="page-link" href="?page=<?= $page + 1 ?><?= $filterStatus?"&filter_status=$filterStatus":'' ?>">
+                    <span>&raquo;</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+</div>
+<?php endif; ?>
+
+</div>
+</div>
+
+</div>
+</section>
 </div>
 </div>
 </div>
 
-
-<!-- MODAL GLOBAL -->
-<div class="modal fade" id="modalStatusGlobal" tabindex="-1">
-<div class="modal-dialog modal-dialog-centered">
+<!-- MODAL UPDATE STATUS -->
+<div class="modal fade" id="modalStatusGlobal" tabindex="-1" role="dialog">
+<div class="modal-dialog modal-lg modal-dialog-centered" role="document">
 <div class="modal-content">
 
 <div class="modal-header bg-primary text-white">
-<h5 class="modal-title"><i class="fas fa-edit"></i> Update Status</h5>
-<button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+    <h5 class="modal-title"><i class="fas fa-edit"></i> Update Status Permintaan</h5>
+    <button type="button" class="close text-white" data-dismiss="modal">
+        <span>&times;</span>
+    </button>
 </div>
 
 <form method="POST">
 <div class="modal-body">
-<p><strong id="modalNama"></strong></p>
-<p id="modalKronologi" style="white-space:pre-line;"></p>
+    <input type="hidden" name="id" id="modalId">
+    
+    <div class="alert alert-info">
+        <strong>No. Surat:</strong> <span id="modalNomorSurat"></span><br>
+        <strong>Pemohon:</strong> <span id="modalNama"></span>
+    </div>
+    
+    <div class="form-group">
+        <label><strong>Data yang Akan Dihapus:</strong></label>
+        <p id="modalDataTerkait" class="form-control-plaintext bg-light p-2 rounded"></p>
+    </div>
+    
+    <div class="form-group">
+        <label><strong>Alasan:</strong></label>
+        <p id="modalAlasan" class="form-control-plaintext bg-light p-2 rounded"></p>
+    </div>
+    
+    <div class="form-group">
+        <label><strong>Kronologi:</strong></label>
+        <p id="modalKronologi" class="form-control-plaintext bg-light p-2 rounded" style="white-space:pre-line;"></p>
+    </div>
 
-<input type="hidden" name="id" id="modalId">
+    <hr>
 
-<div class="form-group">
-<label>Status</label>
-<select name="status" id="modalStatus" class="form-control">
-<option>Menunggu</option>
-<option>Diproses</option>
-<option>Ditolak</option>
-<option>Selesai</option>
-</select>
-</div>
+    <div class="form-group">
+        <label><i class="fas fa-clipboard-check"></i> Update Status <span class="text-danger">*</span></label>
+        <select name="status" id="modalStatus" class="form-control" required>
+            <option value="Menunggu">Menunggu</option>
+            <option value="Diproses">Diproses</option>
+            <option value="Disetujui">Disetujui</option>
+            <option value="Ditolak">Ditolak</option>
+            <option value="Selesai">Selesai</option>
+        </select>
+        <small class="form-text text-muted">
+            <strong>Disetujui:</strong> Permintaan disetujui, siap untuk dihapus<br>
+            <strong>Selesai:</strong> Data sudah berhasil dihapus
+        </small>
+    </div>
+    
+    <div class="form-group">
+        <label><i class="fas fa-comment"></i> Catatan Admin</label>
+        <textarea name="catatan_admin" id="modalCatatanAdmin" class="form-control" rows="4" 
+                  placeholder="Berikan catatan jika diperlukan (opsional, terutama untuk status Ditolak)"></textarea>
+    </div>
+
+    <div class="alert alert-warning">
+        <i class="fas fa-exclamation-triangle"></i> <strong>Perhatian:</strong>
+        <ul class="mb-0 mt-2">
+            <li>Pastikan Anda sudah memverifikasi data dengan benar</li>
+            <li>Status "Selesai" berarti data sudah dihapus dari SIMRS</li>
+            <li>Status "Ditolak" sebaiknya disertai dengan catatan alasan</li>
+        </ul>
+    </div>
 </div>
 
 <div class="modal-footer">
-<button type="submit" name="update_status" class="btn btn-success">Simpan</button>
-<button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+    <button type="submit" name="update_status" class="btn btn-primary">
+        <i class="fas fa-save"></i> Simpan Perubahan
+    </button>
+    <button type="button" class="btn btn-secondary" data-dismiss="modal">
+        <i class="fas fa-times"></i> Batal
+    </button>
 </div>
 </form>
 
-</div></div></div>
-
+</div>
+</div>
+</div>
 
 <script src="assets/modules/jquery.min.js"></script>
 <script src="assets/modules/popper.js"></script>
@@ -249,11 +482,15 @@ $color = [
 <script src="assets/js/custom.js"></script>
 
 <script>
-function openModal(id,status,kronologi,nama){
+function openModal(id, status, kronologi, nama, nomor_surat, data_terkait, alasan, catatan_admin){
     document.getElementById("modalId").value = id;
     document.getElementById("modalStatus").value = status;
     document.getElementById("modalNama").innerHTML = nama;
+    document.getElementById("modalNomorSurat").innerHTML = nomor_surat;
     document.getElementById("modalKronologi").innerHTML = kronologi;
+    document.getElementById("modalDataTerkait").innerHTML = data_terkait || '-';
+    document.getElementById("modalAlasan").innerHTML = alasan || '-';
+    document.getElementById("modalCatatanAdmin").value = catatan_admin || '';
     $('#modalStatusGlobal').modal('show');
 }
 </script>

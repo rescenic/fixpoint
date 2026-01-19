@@ -1,10 +1,38 @@
 <?php
+// ===================================================
+// ERROR HANDLING AMAN PHP 8
+// ===================================================
+error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE);
+ini_set('display_errors', 1);
+
 session_start();
 include 'koneksi.php';
 require 'dompdf/autoload.inc.php';
+
 use Dompdf\Dompdf;
+use Dompdf\Options;
 
 date_default_timezone_set('Asia/Jakarta');
+
+// ===================================================
+// FUNCTION TTE
+// ===================================================
+function getTteByUser($conn, $user_id) {
+    if (empty($user_id)) return null;
+    $q = mysqli_query($conn, "
+        SELECT * FROM tte_user
+        WHERE user_id = '$user_id'
+          AND status = 'aktif'
+        ORDER BY created_at DESC
+        LIMIT 1
+    ");
+    return mysqli_fetch_assoc($q) ?: null;
+}
+
+function qrTte($token) {
+    $url = "http://" . $_SERVER['HTTP_HOST'] . "/cek_tte.php?token=" . $token;
+    return "https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=" . urlencode($url);
+}
 
 // === Fungsi format tanggal Indonesia ===
 function tgl_indo($tanggal) {
@@ -18,9 +46,7 @@ function tgl_indo($tanggal) {
 }
 
 // === Fungsi hitung lama izin (durasi) ===
-
 function hitungLama($tanggal, $jam_keluar, $jam_kembali_real) {
-
     if (empty($jam_keluar) || empty($jam_kembali_real)) {
         return "-";
     }
@@ -41,13 +67,16 @@ function hitungLama($tanggal, $jam_keluar, $jam_kembali_real) {
     $jam = floor($selisih / 3600);
     $menit = floor(($selisih % 3600) / 60);
 
-    return sprintf("%02d jam %02d menit", $jam, $menit);
+    return sprintf("%02d:%02d", $jam, $menit);
 }
 
-
-
 // === Ambil user login ===
-$nama_user = $_SESSION['nama'] ?? 'Petugas';
+$nama_user = $_SESSION['nama'] ?? $_SESSION['nama_user'] ?? 'Petugas';
+$user_id = $_SESSION['user_id'] ?? 0;
+
+// Ambil TTE user yang membuat laporan
+$tte_pembuat = getTteByUser($conn, $user_id);
+$qr_pembuat = $tte_pembuat ? qrTte($tte_pembuat['token']) : '';
 
 // === Filter tanggal dari URL ===
 $tgl_dari = $_GET['tgl_dari'] ?? '';
@@ -69,117 +98,325 @@ $query = mysqli_query($conn, "
     ORDER BY tanggal DESC, created_at DESC
 ");
 
+$total_data = mysqli_num_rows($query);
+
 // === Ambil data perusahaan ===
 $q_perusahaan = mysqli_query($conn, "SELECT * FROM perusahaan LIMIT 1");
 $perusahaan = mysqli_fetch_assoc($q_perusahaan);
 
-// === Konversi logo ke base64 ===
-$logoBase64 = '';
-if (!empty($perusahaan['logo'])) {
-    $logoPath = realpath('uploads/' . $perusahaan['logo']);
-    if ($logoPath && file_exists($logoPath)) {
-        $logoData = file_get_contents($logoPath);
-        $logoType = pathinfo($logoPath, PATHINFO_EXTENSION);
-        $logoBase64 = 'data:image/' . $logoType . ';base64,' . base64_encode($logoData);
-    }
-}
-
 // === Template HTML laporan ===
 $html = '
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
 <style>
-  body { font-family: Arial, sans-serif; font-size: 11px; color: #000; }
-  .kop { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
-  .kop img { float:left; max-height:70px; margin-right:10px; }
-  .kop .nama { font-size: 16px; font-weight:bold; text-transform:uppercase; }
-  .kop .alamat { font-size: 11px; margin-top:2px; }
-  h3 { text-align:center; margin-bottom:5px; clear:both; }
-  p { text-align:center; margin-top:0; font-size:11px; }
-  table { border-collapse: collapse; width: 100%; margin-top:10px; }
-  table, th, td { border: 1px solid #000; }
-  th, td { padding: 5px; font-size:10px; }
-  th { background: #f2f2f2; text-align:center; }
-  td.left { text-align:left; }
-  td.center { text-align:center; }
-  .ttd { width:250px; text-align:center; margin-top:40px; float:right; }
-</style>
-
-<div class="kop">';
-if (!empty($logoBase64)) {
-    $html .= '<img src="'.$logoBase64.'" alt="Logo">';
+body { 
+    font-family: Arial, Helvetica, sans-serif; 
+    font-size: 10pt; 
+    margin: 0;
+    padding: 15px;
+    line-height: 1.3;
 }
-$html .= '
-  <div class="nama">'.htmlspecialchars($perusahaan['nama_perusahaan'] ?? '-').'</div>
-  <div class="alamat">'
-      .htmlspecialchars($perusahaan['alamat'] ?? '-').', '
-      .htmlspecialchars($perusahaan['kota'] ?? '-').', '
-      .htmlspecialchars($perusahaan['provinsi'] ?? '-').'<br>
-      Telp: '.htmlspecialchars($perusahaan['kontak'] ?? '-').' | Email: '.htmlspecialchars($perusahaan['email'] ?? '-').'
+
+/* KOP SURAT */
+.header { 
+    text-align: center; 
+    border-bottom: 2px solid #2c3e50; 
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+}
+
+.header h2 { 
+    margin: 0 0 5px 0; 
+    font-size: 14pt; 
+    color: #2c3e50; 
+    font-weight: bold;
+    line-height: 1.2;
+}
+
+.header .subkop {
+    font-size: 9pt;
+    color: #555;
+    line-height: 1.4;
+}
+
+/* TITLE */
+.title { 
+    text-align: center; 
+    margin: 10px 0 5px 0; 
+    font-size: 12pt; 
+    font-weight: bold; 
+    color: #1f4fd8;
+    text-transform: uppercase;
+}
+
+.periode {
+    text-align: center;
+    font-size: 9pt;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+/* TABLE */
+table { 
+    border-collapse: collapse; 
+    width: 100%; 
+    margin-top: 5px;
+    font-size: 8pt;
+}
+
+table, th, td { 
+    border: 1px solid #000; 
+}
+
+th { 
+    background: #f2f2f2; 
+    text-align: center;
+    padding: 6px 4px;
+    font-weight: bold;
+    font-size: 8pt;
+}
+
+td { 
+    padding: 4px;
+    vertical-align: middle;
+}
+
+td.left { 
+    text-align: left; 
+}
+
+td.center { 
+    text-align: center; 
+}
+
+/* SIGNATURE SECTION */
+.signature-section {
+    margin-top: 15px;
+    width: 100%;
+}
+
+.signature-box {
+    float: right;
+    width: 200px;
+    text-align: center;
+    font-size: 9pt;
+}
+
+.signature-box .location {
+    margin-bottom: 5px;
+}
+
+.signature-box .label {
+    margin-bottom: 3px;
+}
+
+.qr {
+    width: 50px;
+    height: 50px;
+    margin: 5px auto;
+}
+
+.signature-box .name {
+    font-weight: bold;
+    text-decoration: underline;
+    margin-top: 3px;
+    font-size: 9pt;
+}
+
+.signature-box .nik {
+    font-size: 8pt;
+    color: #555;
+    margin-top: 2px;
+}
+
+/* FOOTER */
+.footer { 
+    clear: both;
+    margin-top: 15px; 
+    font-size: 7pt; 
+    text-align: center; 
+    color: #666; 
+    border-top: 1px solid #ccc; 
+    padding-top: 8px;
+    line-height: 1.4;
+}
+
+.footer strong {
+    color: #2c3e50;
+}
+
+.footer .legal {
+    margin-top: 4px;
+    font-size: 6.5pt;
+    color: #888;
+    font-style: italic;
+}
+
+/* SUMMARY BOX */
+.summary-box {
+    margin-top: 8px;
+    padding: 6px;
+    background-color: #f0f8ff;
+    border: 1px solid #2196F3;
+    font-size: 9pt;
+}
+
+.summary-box strong {
+    color: #004085;
+}
+</style>
+</head>
+
+<body>
+
+<!-- KOP SURAT -->
+<div class="header">
+  <h2>'.strtoupper($perusahaan['nama_perusahaan']).'</h2>
+  <div class="subkop">
+    '.$perusahaan['alamat'].' - '.$perusahaan['kota'].', '.$perusahaan['provinsi'].'<br>
+    Telp: '.$perusahaan['kontak'].' | Email: '.$perusahaan['email'].'
   </div>
 </div>
 
-<h3>LAPORAN IZIN KELUAR PEGAWAI</h3>
-<p>Periode: '.(!empty($tgl_dari) ? tgl_indo($tgl_dari) : '-') .' s/d '.(!empty($tgl_sampai) ? tgl_indo($tgl_sampai) : '-').'</p>
+<div class="title">Laporan Izin Keluar Pegawai</div>
+<div class="periode">
+    Periode: '.(!empty($tgl_dari) ? tgl_indo($tgl_dari) : 'Semua') .' s/d '.(!empty($tgl_sampai) ? tgl_indo($tgl_sampai) : 'Semua').'
+</div>
+
+<!-- SUMMARY -->
+<div class="summary-box">
+    <strong>Total Data:</strong> '.$total_data.' izin keluar | 
+    <strong>Dicetak oleh:</strong> '.htmlspecialchars($nama_user).' | 
+    <strong>Tanggal Cetak:</strong> '.tgl_indo(date('Y-m-d')).' '.date('H:i').' WIB
+</div>
 
 <table>
 <thead>
 <tr>
-  <th>No</th>
-  <th>Nama</th>
-  <th>Bagian</th>
-  <th>Tanggal</th>
-  <th>Jam Keluar</th>
-  <th>Jam Kembali</th>
-  <th>Keperluan</th>
-  <th>ACC Atasan</th>
-  <th>ACC SDM</th>
-  <th>Lama</th>
+  <th style="width: 3%;">No</th>
+  <th style="width: 15%;">Nama</th>
+  <th style="width: 12%;">Bagian</th>
+  <th style="width: 10%;">Tanggal</th>
+  <th style="width: 7%;">Keluar</th>
+  <th style="width: 7%;">Kembali</th>
+  <th style="width: 20%;">Keperluan</th>
+  <th style="width: 8%;">Atasan</th>
+  <th style="width: 8%;">SDM</th>
+  <th style="width: 6%;">Durasi</th>
 </tr>
 </thead>
 <tbody>';
 
 $no = 1;
-if (mysqli_num_rows($query) > 0) {
+if ($total_data > 0) {
+    mysqli_data_seek($query, 0); // Reset pointer
     while ($row = mysqli_fetch_assoc($query)) {
-    $lama = hitungLama(
-    $row['tanggal'],
-    $row['jam_keluar'],
-    $row['jam_kembali_real']
-);
+        $lama = hitungLama(
+            $row['tanggal'],
+            $row['jam_keluar'],
+            $row['jam_kembali_real']
+        );
+        
+        // Status badge
+        $status_atasan = $row['status_atasan'];
+        $status_sdm = $row['status_sdm'];
+        
+        $badge_atasan = $status_atasan == 'acc' ? '✓' : ($status_atasan == 'tolak' ? '✗' : '-');
+        $badge_sdm = $status_sdm == 'acc' ? '✓' : ($status_sdm == 'tolak' ? '✗' : '-');
 
         $html .= "
         <tr>
           <td class='center'>{$no}</td>
           <td class='left'>".htmlspecialchars($row['nama'])."</td>
           <td class='center'>".htmlspecialchars($row['bagian'])."</td>
-          <td class='center'>".tgl_indo($row['tanggal'])."</td>
+          <td class='center'>".date('d/m/Y', strtotime($row['tanggal']))."</td>
           <td class='center'>".htmlspecialchars($row['jam_keluar'])."</td>
-          <td class='center'>".($row['jam_kembali_real'] ? htmlspecialchars($row['jam_kembali_real']) : '-')."</td>
-          <td class='left'>".htmlspecialchars($row['keperluan'])."</td>
-          <td class='center'>".ucfirst($row['status_atasan'])."</td>
-          <td class='center'>".ucfirst($row['status_sdm'])."</td>
+          <td class='center'>".($row['jam_kembali_real'] ? date('H:i', strtotime($row['jam_kembali_real'])) : '-')."</td>
+          <td class='left'>".htmlspecialchars(substr($row['keperluan'], 0, 50)).(strlen($row['keperluan']) > 50 ? '...' : '')."</td>
+          <td class='center'>{$badge_atasan}</td>
+          <td class='center'>{$badge_sdm}</td>
           <td class='center'>{$lama}</td>
         </tr>";
         $no++;
     }
 } else {
-    $html .= "<tr><td colspan='10' align='center'>Tidak ada data</td></tr>";
+    $html .= "<tr><td colspan='10' class='center' style='padding: 20px;'>Tidak ada data untuk periode yang dipilih</td></tr>";
 }
+
 $html .= '
 </tbody>
 </table>
 
-<div class="ttd">
-  '.htmlspecialchars($perusahaan['kota'] ?? '-').', '.tgl_indo(date('Y-m-d')).'<br>
-  <div style="text-align:center;">Hormat kami,</div><br><br><br>
-  <strong>'.htmlspecialchars($nama_user).'</strong>
-</div>
-';
+<!-- SIGNATURE SECTION -->
+<div class="signature-section">
+    <div class="signature-box">
+        <div class="location">'.$perusahaan['kota'].', '.tgl_indo(date('Y-m-d')).'</div>
+        <div class="label">Dibuat oleh:</div>';
 
-// === Generate PDF ===
-$dompdf = new Dompdf();
-$dompdf->loadHtml($html);
-$dompdf->setPaper('A4', 'landscape');
-$dompdf->render();
-$dompdf->stream("laporan_izin_keluar.pdf", ["Attachment" => false]);
+if ($tte_pembuat) {
+    $html .= '
+        <img src="'.$qr_pembuat.'" class="qr">
+        <div class="name">'.htmlspecialchars($nama_user).'</div>
+        <div class="nik">'.htmlspecialchars($tte_pembuat['jabatan'] ?? '-').'</div>';
+} else {
+    $html .= '
+        <div style="margin: 30px 0;"></div>
+        <div class="name">'.htmlspecialchars($nama_user).'</div>';
+}
+
+$html .= '
+    </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+<strong>Tanda Tangan Elektronik (TTE) Non Sertifikasi</strong><br>
+Dokumen ini menggunakan TTE Non Sertifikasi yang sah untuk penggunaan internal perusahaan<br>
+sesuai <em>Peraturan Pemerintah Nomor 71 Tahun 2019 tentang Penyelenggaraan Sistem dan Transaksi Elektronik</em><br>
+dan <em>Undang-Undang Nomor 11 Tahun 2008 jo. UU No. 19 Tahun 2016 tentang Informasi dan Transaksi Elektronik (ITE)</em>
+<div class="legal">
+Dokumen ini di-generate melalui aplikasi <strong>FixPoint – Smart Office Management System</strong>
+</div>
+</div>
+
+</body>
+</html>';
+
+// ===================================================
+// GENERATE PDF (WAJIB remote enabled untuk QR)
+// ===================================================
+$options = new Options();
+$options->set('isRemoteEnabled', true);
+$options->set('isHtml5ParserEnabled', true);
+
+$pdf = new Dompdf($options);
+$pdf->loadHtml($html);
+$pdf->setPaper('A4', 'landscape'); // Landscape untuk tabel lebar
+$pdf->render();
+
+// ===================================================
+// GET PDF OUTPUT & EMBED TOKEN
+// ===================================================
+$pdf_output = $pdf->output();
+
+// Embed token di PDF stream (before %%EOF)
+if ($tte_pembuat) {
+    $token_text = "\nTTE-TOKEN:" . $tte_pembuat['token'] . "\n";
+    $pdf_output = str_replace('%%EOF', $token_text . '%%EOF', $pdf_output);
+}
+
+// ===================================================
+// STREAM PDF TO BROWSER
+// ===================================================
+header('Content-Type: application/pdf');
+header('Content-Disposition: inline; filename="Laporan_Izin_Keluar_'.date('Ymd').'.pdf"');
+header('Cache-Control: private, max-age=0, must-revalidate');
+header('Pragma: public');
+header('Content-Length: ' . strlen($pdf_output));
+
+// Output PDF
+echo $pdf_output;
+exit;
 ?>

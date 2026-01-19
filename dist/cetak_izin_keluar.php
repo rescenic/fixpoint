@@ -169,8 +169,7 @@ body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; }
 ($tte_pemohon ? '
 <img src="'.$qr_pemohon.'" class="qr"><br>
 <div class="tte-name">'.htmlspecialchars($tte_pemohon['nama']).'</div>
-'.htmlspecialchars($tte_pemohon['jabatan']).'<br>
-<small>'.date('d-m-Y H:i', strtotime($tte_pemohon['created_at'])).'</small>
+'.htmlspecialchars($tte_pemohon['jabatan']).'
 ' : '<em>Belum ditandatangani</em>').'
 </td>
 
@@ -178,8 +177,7 @@ body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; }
 ($tte_atasan ? '
 <img src="'.$qr_atasan.'" class="qr"><br>
 <div class="tte-name">'.htmlspecialchars($tte_atasan['nama']).'</div>
-'.htmlspecialchars($tte_atasan['jabatan']).'<br>
-<small>'.date('d-m-Y H:i', strtotime($tte_atasan['created_at'])).'</small>
+'.htmlspecialchars($tte_atasan['jabatan']).'
 ' : '<em>Belum disetujui</em>').'
 </td>
 
@@ -187,8 +185,7 @@ body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; }
 ($tte_sdm ? '
 <img src="'.$qr_sdm.'" class="qr"><br>
 <div class="tte-name">'.htmlspecialchars($tte_sdm['nama']).'</div>
-'.htmlspecialchars($tte_sdm['jabatan']).'<br>
-<small>'.date('d-m-Y H:i', strtotime($tte_sdm['created_at'])).'</small>
+'.htmlspecialchars($tte_sdm['jabatan']).'
 ' : '<em>Belum disetujui</em>').'
 </td>
 
@@ -201,8 +198,13 @@ if ($status_acc) {
 
 $html .= '
 <div class="footer">
-TTE Non Sertifikasi di-generate melalui aplikasi
-<strong>FixPoint – Smart Office Management System</strong>
+<strong>Tanda Tangan Elektronik (TTE) Non Sertifikasi</strong><br>
+Dokumen ini menggunakan TTE Non Sertifikasi yang sah untuk penggunaan internal perusahaan<br>
+sesuai <em>Peraturan Pemerintah Nomor 71 Tahun 2019 tentang Penyelenggaraan Sistem dan Transaksi Elektronik</em><br>
+dan <em>Undang-Undang Nomor 11 Tahun 2008 jo. UU No. 19 Tahun 2016 tentang Informasi dan Transaksi Elektronik (ITE)</em>
+<div class="legal">
+Dokumen ini di-generate melalui aplikasi <strong>FixPoint – Smart Office Management System</strong>
+</div>
 </div>
 
 </div>

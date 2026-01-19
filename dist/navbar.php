@@ -25,10 +25,8 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
     box-shadow: none !important;
   }
 
-
-
   .modal-full-width {
-    max-width: 98% !important; /* hampir full screen */
+    max-width: 100% !important;
     margin: 1rem auto;
   }
 
@@ -36,61 +34,115 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
     .modal-full-width .modal-content {
       padding: 1rem 2rem;
     }
+  }
   
   .modal-body {
-  max-height: 80vh;
-  overflow-y: auto;
-}
+    max-height: 80vh;
+    overflow-y: auto;
+  }
 
-.modal-full-width {
-  max-width: 50% !important;
-  margin: 1rem auto;
-}
+  .modal-full-width {
+    max-width: 50% !important;
+    margin: 1rem auto;
+  }
 
-.modal-body {
-  max-height: 60vh;
-  overflow-y: auto;
-}
+  .modal-body {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
 
-.chat-bubble-left {
-  background-color: #f1f1f1;
-  color: #000;
-  padding: 8px 12px;
-  border-radius: 15px 15px 15px 0;
-  margin-bottom: 5px;
-  display: inline-block;
-  max-width: 80%;
-}
+  .chat-bubble-left {
+    background-color: #f1f1f1;
+    color: #000;
+    padding: 8px 12px;
+    border-radius: 15px 15px 15px 0;
+    margin-bottom: 5px;
+    display: inline-block;
+    max-width: 80%;
+  }
 
-.chat-bubble-right {
-  background-color: #6777ef;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 15px 15px 0 15px;
-  margin-bottom: 5px;
-  display: inline-block;
-  max-width: 80%;
-}
+  .chat-bubble-right {
+    background-color: #6777ef;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 15px 15px 0 15px;
+    margin-bottom: 5px;
+    display: inline-block;
+    max-width: 80%;
+  }
 
+  .chat-message {
+    padding: 5px;
+    margin-bottom: 5px;
+    border-radius: 5px;
+  }
 
-.chat-message {
-  padding: 5px;
-  margin-bottom: 5px;
-  border-radius: 5px;
-}
+  .chat-message.received {
+    background-color: #f1f1f1;
+    text-align: left;
+  }
 
-.chat-message.received {
-  background-color: #f1f1f1;
-  text-align: left;
-}
+  .chat-message.sent {
+    background-color: #d1ecf1;
+    text-align: right;
+  }
 
-.chat-message.sent {
-  background-color: #d1ecf1;
-  text-align: right;
-}
+  /* Style untuk menu modal */
+  .menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 15px;
+    padding: 10px;
+  }
 
+  .menu-item-card {
+    background: #fff;
+    border: 1px solid #e3e6f0;
+    border-radius: 8px;
+    padding: 15px;
+    text-align: center;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    text-decoration: none;
+    color: #333;
+  }
 
+  .menu-item-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    text-decoration: none;
+    color: #6777ef;
+  }
 
+  .menu-item-card i {
+    font-size: 32px;
+    margin-bottom: 10px;
+    color: #6777ef;
+  }
+
+  .menu-item-card .menu-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .menu-category-title {
+    background: #f8f9fc;
+    padding: 10px 15px;
+    margin: 15px 0 10px 0;
+    border-left: 4px solid #6777ef;
+    font-weight: bold;
+    color: #5a5c69;
+  }
+
+  .search-menu-box {
+    position: sticky;
+    top: 0;
+    background: white;
+    padding: 15px;
+    border-bottom: 1px solid #e3e6f0;
+    z-index: 10;
+  }
 </style>
 
 <div class="navbar-bg"></div>
@@ -112,24 +164,23 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
       <i class="fas fa-info-circle mr-1"></i> Panduan Tiket
     </button>
 
+    <!-- Tombol Catatan Kerja -->
+    <button type="button" class="btn btn-flat text-white ml-2" style="background: transparent; border: none;" 
+            data-toggle="modal" data-target="#catatanModal" data-toggle="tooltip" title="Catatan Kerja">
+      <i class="fas fa-pen-square" style="font-size: 20px;"></i>
+    </button>
 
-      <button type="button" class="btn btn-flat text-white ml-2" style="background: transparent; border: none;" 
-              data-toggle="modal" data-target="#catatanModal" data-toggle="tooltip" title="Catatan Kerja">
-        <i class="fas fa-pen-square" style="font-size: 20px;"></i>
-      </button>
+    <!-- Tombol Pesan -->
+    <button type="button" class="btn btn-flat text-white ml-2" style="background: transparent; border: none;" 
+            data-toggle="modal" data-target="#pesanModal" data-toggle="tooltip" title="Kirim Pesan">
+      <i class="fas fa-envelope" style="font-size: 20px;"></i>
+    </button>
 
-
-<!-- Tombol Pesan (ikon saja, tidak bulat, tidak hover mencolok) -->
-<button type="button" class="btn btn-flat text-white ml-2" style="background: transparent; border: none;" data-toggle="modal" data-target="#pesanModal" data-toggle="tooltip" title="Kirim Pesan">
-  <i class="fas fa-envelope" style="font-size: 20px;"></i>
-</button>
-<button type="button" class="btn btn-flat text-white ml-2" style="background: transparent; border: none;" data-toggle="modal" data-target="#fungsiMenuModal" data-toggle="tooltip" title="Fungsi Menu">
-  <i class="fas fa-question-circle" style="font-size: 20px;"></i>
-</button>
-
-
-
-
+    <!-- Tombol Menu (Ganti Fungsi Menu) -->
+    <button type="button" class="btn btn-flat text-white ml-2" style="background: transparent; border: none;" 
+            data-toggle="modal" data-target="#menuDesktopModal" data-toggle="tooltip" title="Semua Menu">
+      <i class="fas fa-th-large" style="font-size: 20px;"></i>
+    </button>
 
   </form>
 
@@ -150,6 +201,288 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
   </ul>
 </nav>
 
+<!-- Modal Menu Desktop -->
+<div class="modal fade" id="menuDesktopModal" tabindex="-1" role="dialog" aria-labelledby="menuDesktopModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl" role="document" style="max-width: 90%;">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="menuDesktopModalLabel">
+          <i class="fas fa-th-large"></i> Semua Menu Aplikasi
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      
+      <div class="modal-body p-0">
+        <!-- Search Box -->
+        <div class="search-menu-box">
+          <input type="text" class="form-control" id="searchMenuModal" placeholder="🔍 Cari menu...">
+        </div>
+
+        <!-- Menu Content -->
+        <div id="menuModalContent" style="padding: 20px;">
+          
+          <?php
+          include 'koneksi.php';
+          $user_id = $_SESSION['user_id'];
+          
+          // Ambil semua file_menu yang boleh diakses user ini
+          $allowed_files = [];
+          $query = "SELECT menu.file_menu FROM akses_menu 
+                    JOIN menu ON akses_menu.menu_id = menu.id 
+                    WHERE akses_menu.user_id = '$user_id'";
+          $result = mysqli_query($conn, $query);
+          while ($row = mysqli_fetch_assoc($result)) {
+            $allowed_files[] = $row['file_menu'];
+          }
+          ?>
+
+          <!-- DASHBOARD -->
+          <div class="menu-category-title">
+            <i class="fas fa-fire"></i> DASHBOARD
+          </div>
+          <div class="menu-grid">
+            <?php if (in_array('dashboard.php', $allowed_files)): ?>
+            <a href="dashboard.php" class="menu-item-card">
+              <i class="fas fa-tachometer-alt"></i>
+              <p class="menu-title">Dashboard</p>
+            </a>
+            <?php endif; ?>
+            
+            <?php if (in_array('dashboard2.php', $allowed_files)): ?>
+            <a href="dashboard2.php" class="menu-item-card">
+              <i class="fas fa-user-tie"></i>
+              <p class="menu-title">Dashboard Direktur</p>
+            </a>
+            <?php endif; ?>
+          </div>
+
+          <!-- PENGAJUAN -->
+          <div class="menu-category-title">
+            <i class="fas fa-list"></i> PENGAJUAN / ORDER
+          </div>
+          <div class="menu-grid">
+            <?php if (in_array('order_tiket_it_software.php', $allowed_files)): ?>
+            <a href="order_tiket_it_software.php" class="menu-item-card">
+              <i class="fas fa-code"></i>
+              <p class="menu-title">Tiket IT Software</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('order_tiket_it_hardware.php', $allowed_files)): ?>
+            <a href="order_tiket_it_hardware.php" class="menu-item-card">
+              <i class="fas fa-desktop"></i>
+              <p class="menu-title">Tiket IT Hardware</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('order_tiket_sarpras.php', $allowed_files)): ?>
+            <a href="order_tiket_sarpras.php" class="menu-item-card">
+              <i class="fas fa-wrench"></i>
+              <p class="menu-title">Tiket Sarpras</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('off_duty.php', $allowed_files)): ?>
+            <a href="off_duty.php" class="menu-item-card">
+              <i class="fas fa-user-slash"></i>
+              <p class="menu-title">Off-Duty</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('izin_keluar.php', $allowed_files)): ?>
+            <a href="izin_keluar.php" class="menu-item-card">
+              <i class="fas fa-door-open"></i>
+              <p class="menu-title">Izin Keluar</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('pengajuan_cuti.php', $allowed_files)): ?>
+            <a href="pengajuan_cuti.php" class="menu-item-card">
+              <i class="fas fa-calendar-times"></i>
+              <p class="menu-title">Pengajuan Cuti</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('ganti_jadwal_dinas.php', $allowed_files)): ?>
+            <a href="ganti_jadwal_dinas.php" class="menu-item-card">
+              <i class="fas fa-exchange-alt"></i>
+              <p class="menu-title">Ganti Jadwal</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('edit_data_simrs.php', $allowed_files)): ?>
+            <a href="edit_data_simrs.php" class="menu-item-card">
+              <i class="fas fa-edit"></i>
+              <p class="menu-title">Edit Data SIMRS</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('hapus_data.php', $allowed_files)): ?>
+            <a href="hapus_data.php" class="menu-item-card">
+              <i class="fas fa-trash"></i>
+              <p class="menu-title">Hapus Data SIMRS</p>
+            </a>
+            <?php endif; ?>
+          </div>
+
+          <!-- DATA PENGAJUAN -->
+          <div class="menu-category-title">
+            <i class="fas fa-folder-open"></i> DATA PENGAJUAN
+          </div>
+          <div class="menu-grid">
+            <?php if (in_array('data_tiket_it_software.php', $allowed_files)): ?>
+            <a href="data_tiket_it_software.php" class="menu-item-card">
+              <i class="fas fa-code"></i>
+              <p class="menu-title">Data Tiket IT Soft</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_tiket_it_hardware.php', $allowed_files)): ?>
+            <a href="data_tiket_it_hardware.php" class="menu-item-card">
+              <i class="fas fa-cogs"></i>
+              <p class="menu-title">Data Tiket IT Hard</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_tiket_sarpras.php', $allowed_files)): ?>
+            <a href="data_tiket_sarpras.php" class="menu-item-card">
+              <i class="fas fa-tools"></i>
+              <p class="menu-title">Data Tiket Sarpras</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_off_duty.php', $allowed_files)): ?>
+            <a href="data_off_duty.php" class="menu-item-card">
+              <i class="fas fa-calendar-times"></i>
+              <p class="menu-title">Data Off-Duty</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('acc_edit_data.php', $allowed_files)): ?>
+            <a href="acc_edit_data.php" class="menu-item-card">
+              <i class="fas fa-check-circle"></i>
+              <p class="menu-title">ACC Edit Data</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_permintaan_hapus_data_simrs.php', $allowed_files)): ?>
+            <a href="data_permintaan_hapus_data_simrs.php" class="menu-item-card">
+              <i class="fas fa-trash-alt"></i>
+              <p class="menu-title">Permintaan Hapus</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_cuti_delegasi.php', $allowed_files)): ?>
+            <a href="data_cuti_delegasi.php" class="menu-item-card">
+              <i class="fas fa-users"></i>
+              <p class="menu-title">ACC Cuti Delegasi</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_cuti_atasan.php', $allowed_files)): ?>
+            <a href="data_cuti_atasan.php" class="menu-item-card">
+              <i class="fas fa-user-tie"></i>
+              <p class="menu-title">ACC Cuti Atasan</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_cuti_hrd.php', $allowed_files)): ?>
+            <a href="data_cuti_hrd.php" class="menu-item-card">
+              <i class="fas fa-id-badge"></i>
+              <p class="menu-title">ACC Cuti HRD</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('acc_keluar_atasan.php', $allowed_files)): ?>
+            <a href="acc_keluar_atasan.php" class="menu-item-card">
+              <i class="fas fa-user-check"></i>
+              <p class="menu-title">ACC Keluar Atasan</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('acc_keluar_sdm.php', $allowed_files)): ?>
+            <a href="acc_keluar_sdm.php" class="menu-item-card">
+              <i class="fas fa-check-double"></i>
+              <p class="menu-title">ACC Keluar SDM</p>
+            </a>
+            <?php endif; ?>
+          </div>
+
+          <!-- IT DEPARTEMEN -->
+          <div class="menu-category-title">
+            <i class="fas fa-desktop"></i> IT DEPARTEMEN
+          </div>
+          <div class="menu-grid">
+            <?php if (in_array('handling_time.php', $allowed_files)): ?>
+            <a href="handling_time.php" class="menu-item-card">
+              <i class="fas fa-stopwatch"></i>
+              <p class="menu-title">Handling Time</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('spo_it.php', $allowed_files)): ?>
+            <a href="spo_it.php" class="menu-item-card">
+              <i class="fas fa-file-alt"></i>
+              <p class="menu-title">SPO IT</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('input_spo_it.php', $allowed_files)): ?>
+            <a href="input_spo_it.php" class="menu-item-card">
+              <i class="fas fa-file-signature"></i>
+              <p class="menu-title">Input SPO IT</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('berita_acara_it.php', $allowed_files)): ?>
+            <a href="berita_acara_it.php" class="menu-item-card">
+              <i class="fas fa-scroll"></i>
+              <p class="menu-title">Berita Acara</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('data_barang_it.php', $allowed_files)): ?>
+            <a href="data_barang_it.php" class="menu-item-card">
+              <i class="fas fa-boxes"></i>
+              <p class="menu-title">Data Barang IT</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('maintenance_rutin.php', $allowed_files)): ?>
+            <a href="maintenance_rutin.php" class="menu-item-card">
+              <i class="fas fa-sync-alt"></i>
+              <p class="menu-title">Maintenance Rutin</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('koneksi_bridging.php', $allowed_files)): ?>
+            <a href="koneksi_bridging.php" class="menu-item-card">
+              <i class="fas fa-link"></i>
+              <p class="menu-title">Koneksi Bridging</p>
+            </a>
+            <?php endif; ?>
+
+            <?php if (in_array('log_login.php', $allowed_files)): ?>
+            <a href="log_login.php" class="menu-item-card">
+              <i class="fas fa-history"></i>
+              <p class="menu-title">Log Login</p>
+            </a>
+            <?php endif; ?>
+          </div>
+
+          <!-- Tambahkan kategori lainnya sesuai kebutuhan... -->
+
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Modal Chat Pesan -->
 <div class="modal fade" id="pesanModal" tabindex="-1" role="dialog" aria-labelledby="pesanModalLabel" aria-hidden="true">
@@ -166,7 +499,6 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
         <div class="row no-gutters">
           <!-- Sidebar User List -->
           <div class="col-md-4 border-right" style="max-height: 400px; overflow-y: auto;" id="daftar-pengguna">
-            <!-- Dinamis via JavaScript -->
             <div class="text-center text-muted p-3"><em>Memuat pengguna...</em></div>
           </div>
 
@@ -191,13 +523,9 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
   </div>
 </div>
 
-
-
-
 <!-- Modal Panduan Tiket -->
 <div class="modal fade" id="panduanModal" tabindex="-1" role="dialog" aria-labelledby="panduanModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-full-width" role="document">
-
     <div class="modal-content">
       <div class="modal-header bg-info text-white">
         <h5 class="modal-title" id="panduanModalLabel"><i class="fas fa-info-circle"></i> Kategori Layanan IT</h5>
@@ -206,155 +534,60 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
         </button>
       </div>
 
-
-     <div class="modal-body">
-  <div class="row">
-    <!-- Kolom IT Software -->
-    <div class="col-md-6">
-      <h6 class="text-info font-weight-bold mb-3">
-        <i class="fas fa-laptop-code"></i> IT Software
-      </h6>
-      <?php
-      include 'koneksi.php';
-      $querySoftware = "SELECT nama_kategori FROM kategori_software ORDER BY nama_kategori ASC";
-      $resultSoftware = mysqli_query($conn, $querySoftware);
-
-      if (mysqli_num_rows($resultSoftware) > 0) {
-        while ($row = mysqli_fetch_assoc($resultSoftware)) {
-          echo '
-          <div class="mb-2 p-2 rounded text-white" style="background-color: #007bff;">
-            <i class="fas fa-check-circle mr-2"></i> ' . htmlspecialchars($row['nama_kategori']) . '
-          </div>';
-        }
-      } else {
-        echo '<div class="text-muted"><em>Data tidak tersedia</em></div>';
-      }
-      ?>
-    </div>
-
-    <!-- Kolom IT Hardware -->
-    <div class="col-md-6">
-      <h6 class="text-dark font-weight-bold mb-3">
-        <i class="fas fa-desktop"></i> IT Hardware
-      </h6>
-      <?php
-      $queryHardware = "SELECT nama_kategori FROM kategori_hardware ORDER BY nama_kategori ASC";
-      $resultHardware = mysqli_query($conn, $queryHardware);
-
-      if (mysqli_num_rows($resultHardware) > 0) {
-        while ($row = mysqli_fetch_assoc($resultHardware)) {
-          echo '
-          <div class="mb-2 p-2 rounded text-white" style="background-color: #343a40;">
-            <i class="fas fa-check-circle mr-2"></i> ' . htmlspecialchars($row['nama_kategori']) . '
-          </div>';
-        }
-      } else {
-        echo '<div class="text-muted"><em>Data tidak tersedia</em></div>';
-      }
-      ?>
-    </div>
-  </div>
-</div>
-
-
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-
-<!-- Modal Fungsi Menu -->
-<div class="modal fade" id="fungsiMenuModal" tabindex="-1" role="dialog" aria-labelledby="fungsiMenuModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
-    <div class="modal-content">
-      <div class="modal-header bg-success text-white">
-        <h5 class="modal-title" id="fungsiMenuModalLabel"><i class="fas fa-question-circle"></i> Daftar Fungsi Menu</h5>
-        <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup">
-          <span aria-hidden="true">&times;</span>
-        </button>
-      </div>
       <div class="modal-body">
+        <div class="row">
+          <!-- Kolom IT Software -->
+          <div class="col-md-6">
+            <h6 class="text-info font-weight-bold mb-3">
+              <i class="fas fa-laptop-code"></i> IT Software
+            </h6>
+            <?php
+            $querySoftware = "SELECT nama_kategori FROM kategori_software ORDER BY nama_kategori ASC";
+            $resultSoftware = mysqli_query($conn, $querySoftware);
 
-       <ul class="list-group list-group-flush">
-  <li class="list-group-item"><i class="fas fa-fire mr-2"></i><strong>Dashboard:</strong> Ringkasan informasi penting dan status tiket</li>
-  <li class="list-group-item"><i class="fas fa-user-tie mr-2"></i><strong>Dashboard Direktur:</strong> Ringkasan Direktur</li>
+            if (mysqli_num_rows($resultSoftware) > 0) {
+              while ($row = mysqli_fetch_assoc($resultSoftware)) {
+                echo '
+                <div class="mb-2 p-2 rounded text-white" style="background-color: #007bff;">
+                  <i class="fas fa-check-circle mr-2"></i> ' . htmlspecialchars($row['nama_kategori']) . '
+                </div>';
+              }
+            } else {
+              echo '<div class="text-muted"><em>Data tidak tersedia</em></div>';
+            }
+            ?>
+          </div>
 
-  <li class="list-group-item"><i class="fas fa-cogs mr-2"></i><strong>Data Tiket IT Hard:</strong> Monitoring hardware IT</li>
-  <li class="list-group-item"><i class="fas fa-code mr-2"></i><strong>Data Tiket IT Soft:</strong> Monitoring software IT</li>
-  <li class="list-group-item"><i class="fas fa-calendar-times mr-2"></i><strong>Data Off-Duty:</strong> Data cuti/tidak bertugas</li>
-  <li class="list-group-item"><i class="fas fa-user-slash mr-2"></i><strong>Off-Duty:</strong> Pengajuan cuti/tidak bertugas</li>
-  <li class="list-group-item"><i class="fas fa-ticket-alt mr-2"></i><strong>Tiket IT Hard:</strong> Order tiket hardware IT</li>
-  <li class="list-group-item"><i class="fas fa-ticket-alt mr-2"></i><strong>Tiket IT Soft:</strong> Order tiket software IT</li>
-  <li class="list-group-item"><i class="fas fa-stopwatch mr-2"></i><strong>Handling Time:</strong> Waktu penanganan tiket</li>
-  <li class="list-group-item"><i class="fas fa-file-alt mr-2"></i><strong>SPO IT:</strong> Standar Operasional Prosedur IT</li>
-  <li class="list-group-item"><i class="fas fa-file-signature mr-2"></i><strong>Input SPO IT:</strong> Input dokumen SPO IT</li>
-  <li class="list-group-item"><i class="fas fa-scroll mr-2"></i><strong>Berita Acara:</strong> Catatan pemeriksaan barang IT</li>
-  <li class="list-group-item"><i class="fas fa-boxes mr-2"></i><strong>Data Barang IT:</strong> Inventaris perangkat IT</li>
-  <li class="list-group-item"><i class="fas fa-sync-alt mr-2"></i><strong>Maintenance Rutin:</strong> Perawatan rutin perangkat IT</li>
-  <li class="list-group-item"><i class="fas fa-link mr-2"></i><strong>Koneksi Bridging:</strong> Koneksi sistem integrasi</li>
+          <!-- Kolom IT Hardware -->
+          <div class="col-md-6">
+            <h6 class="text-dark font-weight-bold mb-3">
+              <i class="fas fa-desktop"></i> IT Hardware
+            </h6>
+            <?php
+            $queryHardware = "SELECT nama_kategori FROM kategori_hardware ORDER BY nama_kategori ASC";
+            $resultHardware = mysqli_query($conn, $queryHardware);
 
-  <li class="list-group-item"><i class="fas fa-ticket-alt mr-2"></i><strong>Order Tiket Sarpras:</strong> Permintaan sarana prasarana</li>
-  <li class="list-group-item"><i class="fas fa-clipboard-list mr-2"></i><strong>Data Tiket Sarpras:</strong> Daftar tiket sarpras</li>
-  <li class="list-group-item"><i class="fas fa-stopwatch mr-2"></i><strong>Handling Time Sarpras:</strong> Waktu penanganan sarpras</li>
-  <li class="list-group-item"><i class="fas fa-boxes mr-2"></i><strong>Barang Sarpras:</strong> Inventaris sarana prasarana</li>
-  <li class="list-group-item"><i class="fas fa-cogs mr-2"></i><strong>Maintenance Sarpras:</strong> Perawatan rutin sarpras</li>
-
-  <li class="list-group-item"><i class="fas fa-chart-line mr-2"></i><strong>Indikator Mutu:</strong> Monitoring mutu dan kinerja</li>
-
-  <li class="list-group-item"><i class="fas fa-file-alt mr-2"></i><strong>Data Dokumen:</strong> Dokumen akreditasi</li>
-  <li class="list-group-item"><i class="fas fa-plus mr-2"></i><strong>Input Dokumen:</strong> Upload dokumen akreditasi</li>
-  <li class="list-group-item"><i class="fas fa-database mr-2"></i><strong>Master Pokja:</strong> Data tim kerja akreditasi</li>
-
-  <li class="list-group-item"><i class="fas fa-user-clock mr-2"></i><strong>Transaksi Gaji:</strong> Input dan pengelolaan gaji</li>
-  <li class="list-group-item"><i class="fas fa-user-clock mr-2"></i><strong>Data Gaji:</strong> Rekapitulasi gaji pegawai</li>
-
-  <li class="list-group-item"><i class="fas fa-envelope-open-text mr-2"></i><strong>Surat Masuk:</strong> Kelola surat masuk</li>
-  <li class="list-group-item"><i class="fas fa-paper-plane mr-2"></i><strong>Surat Keluar:</strong> Kelola surat keluar</li>
-  <li class="list-group-item"><i class="fas fa-archive mr-2"></i><strong>Arsip Digital:</strong> Dokumentasi arsip digital</li>
-  <li class="list-group-item"><i class="fas fa-calendar-alt mr-2"></i><strong>Agenda Direktur:</strong> Jadwal penting pimpinan</li>
-  <li class="list-group-item"><i class="fas fa-calendar-check mr-2"></i><strong>Lihat Agenda:</strong> Monitoring agenda</li>
-  <li class="list-group-item"><i class="fas fa-folder-open mr-2"></i><strong>Kategori Arsip:</strong> Pengelompokan arsip</li>
-
-  <li class="list-group-item"><i class="fas fa-clipboard-list mr-2"></i><strong>Catatan Kerja:</strong> Rekap aktivitas kerja</li>
-  <li class="list-group-item"><i class="fas fa-calendar-check mr-2"></i><strong>Laporan Harian:</strong> Catatan harian karyawan</li>
-  <li class="list-group-item"><i class="fas fa-file-alt mr-2"></i><strong>Laporan Bulanan:</strong> Rekap bulanan</li>
-  <li class="list-group-item"><i class="fas fa-calendar-alt mr-2"></i><strong>Laporan Tahunan:</strong> Rekap tahunan</li>
-
-  <li class="list-group-item"><i class="fas fa-users mr-2"></i><strong>Data Karyawan:</strong> Data pegawai</li>
-  <li class="list-group-item"><i class="fas fa-users mr-2"></i><strong>Exit Clearance:</strong> Proses keluar pegawai</li>
-  <li class="list-group-item"><i class="fas fa-calendar-alt mr-2"></i><strong>Master Cuti:</strong> Data cuti pegawai</li>
-  <li class="list-group-item"><i class="fas fa-file-signature mr-2"></i><strong>Pengajuan Cuti:</strong> Form pengajuan cuti</li>
-  <li class="list-group-item"><i class="fas fa-calendar-check mr-2"></i><strong>Jatah Cuti:</strong> Kuota cuti pegawai</li>
-
-  <li class="list-group-item"><i class="fas fa-door-open mr-2"></i><strong>Izin Keluar:</strong> Form izin keluar kantor</li>
-
-  <li class="list-group-item"><i class="fas fa-clock mr-2"></i><strong>Jadwal:</strong> Jadwal dinas dan absensi</li>
-
-  <li class="list-group-item"><i class="fas fa-users-cog mr-2"></i><strong>Rekruitment:</strong> Proses penerimaan pegawai</li>
-
-  <li class="list-group-item"><i class="fas fa-globe mr-2"></i><strong>Website:</strong> Konten website dan dokumentasi</li>
-
-  <li class="list-group-item"><i class="fas fa-folder mr-2"></i><strong>Master Data:</strong> Data perusahaan dan pengguna</li>
-
-  <li class="list-group-item"><i class="fas fa-cogs mr-2"></i><strong>Setting:</strong> Pengaturan akun dan profil</li>
-
-  <li class="list-group-item"><i class="fas fa-info-circle mr-2"></i><strong>Tentang Aplikasi:</strong> Informasi pengembang dan lisensi</li>
-  <li class="list-group-item"><i class="fas fa-sign-out-alt mr-2"></i><strong>Keluar:</strong> Logout dari sistem</li>
-</ul>
-
-
+            if (mysqli_num_rows($resultHardware) > 0) {
+              while ($row = mysqli_fetch_assoc($resultHardware)) {
+                echo '
+                <div class="mb-2 p-2 rounded text-white" style="background-color: #343a40;">
+                  <i class="fas fa-check-circle mr-2"></i> ' . htmlspecialchars($row['nama_kategori']) . '
+                </div>';
+              }
+            } else {
+              echo '<div class="text-muted"><em>Data tidak tersedia</em></div>';
+            }
+            ?>
+          </div>
+        </div>
       </div>
+
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary btn-sm" data-dismiss="modal">Tutup</button>
       </div>
-
-
     </div>
   </div>
 </div>
-
 
 <!-- Modal Catatan Kerja -->
 <div class="modal fade" id="catatanModal" tabindex="-1" role="dialog" aria-labelledby="catatanModalLabel" aria-hidden="true">
@@ -388,17 +621,11 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
   </div>
 </div>
 
-
-
-<!-- Jam Digital Script -->
-
-<!-- jQuery (wajib sebelum Bootstrap JS) -->
 <!-- jQuery & Bootstrap -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.6.2/js/bootstrap.min.js"></script>
 <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.6.2/css/bootstrap.min.css" rel="stylesheet">
-
 
 <!-- Jam Digital -->
 <script>
@@ -422,14 +649,32 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
 
 <script>
   $(document).ready(function () {
-    // Inisialisasi
+    // Inisialisasi tooltip
     $('[data-toggle="tooltip"]').tooltip();
 
+    // Fix modal backdrop
     $(document).on('hidden.bs.modal', function () {
       if (!$('.modal.show').length) {
         $('.modal-backdrop').remove();
         $('body').removeClass('modal-open').css('padding-right', '');
       }
+    });
+
+    // Search menu dalam modal
+    $('#searchMenuModal').on('keyup', function() {
+      var value = $(this).val().toLowerCase();
+      $('#menuModalContent .menu-item-card').filter(function() {
+        $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1);
+      });
+      
+      // Hide kategori jika semua menu di dalamnya hidden
+      $('#menuModalContent .menu-category-title').each(function() {
+        var $category = $(this);
+        var $nextGrid = $category.next('.menu-grid');
+        var hasVisible = $nextGrid.find('.menu-item-card:visible').length > 0;
+        $category.toggle(hasVisible);
+        $nextGrid.toggle(hasVisible);
+      });
     });
 
     // Modal chat dibuka
@@ -455,16 +700,14 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
       if (!pesan || !ke_id) return;
 
       $.post('kirim_pesan.php', $(this).serialize(), function () {
-        // Kirim ke WebSocket
         const data = {
           dari_id: dari_id,
           ke_id: ke_id,
           nama_pengirim: nama_pengirim,
           pesan: pesan
         };
-        ws.send(JSON.stringify(data));
+        if (typeof ws !== 'undefined') ws.send(JSON.stringify(data));
 
-        // Tambahkan bubble kanan secara langsung (tidak perlu reload)
         const bubble = `<div class="chat-bubble-right">${pesan}</div>`;
         $('#chat-body').append(bubble);
         $('#chat-body').scrollTop($('#chat-body')[0].scrollHeight);
@@ -475,7 +718,6 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
       });
     });
 
-    // Handle perubahan pengguna
     window.handleUserChange = function (select) {
       const userId = select.value;
       if (userId) {
@@ -489,7 +731,6 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
       }
     };
 
-    // Fungsi load chat
     window.loadChat = function (userId) {
       $.post('load_chat.php', { penerima_id: userId }, function (res) {
         $('#chat-body').html(res);
@@ -497,7 +738,6 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
       });
     };
 
-    // Ambil daftar pengguna online (opsional)
     function loadOnlineUsers() {
       $.getJSON('get_online_users.php', function (users) {
         let html = '';
@@ -526,34 +766,36 @@ date_default_timezone_set('Asia/Jakarta'); // WIB
   });
 
   // WebSocket
-  const ws = new WebSocket("ws://localhost:8081");
+  try {
+    const ws = new WebSocket("ws://localhost:8081");
 
-  ws.onopen = () => console.log("🟢 WebSocket Connected");
+    ws.onopen = () => console.log("🟢 WebSocket Connected");
 
-  ws.onmessage = function (event) {
-    const data = JSON.parse(event.data);
-    const currentChat = $('#penerima_id').val();
+    ws.onmessage = function (event) {
+      const data = JSON.parse(event.data);
+      const currentChat = $('#penerima_id').val();
 
-    if (data.dari_id == currentChat) {
-      const bubble = `<div class="chat-bubble-left">${data.nama_pengirim}: ${data.pesan}</div>`;
-      $('#chat-body').append(bubble);
-      $('#chat-body').scrollTop($('#chat-body')[0].scrollHeight);
-    } else {
-      console.log("📨 Pesan baru dari", data.nama_pengirim);
-      // Tambahkan notifikasi jika perlu
-    }
-  };
+      if (data.dari_id == currentChat) {
+        const bubble = `<div class="chat-bubble-left">${data.nama_pengirim}: ${data.pesan}</div>`;
+        $('#chat-body').append(bubble);
+        $('#chat-body').scrollTop($('#chat-body')[0].scrollHeight);
+      } else {
+        console.log("📨 Pesan baru dari", data.nama_pengirim);
+      }
+    };
 
-  ws.onerror = function (err) {
-    console.error("❌ WebSocket Error:", err);
-  };
+    ws.onerror = function (err) {
+      console.error("❌ WebSocket Error:", err);
+    };
 
-  ws.onclose = function () {
-    console.log("🔴 WebSocket Disconnected");
-  };
-
-  
+    ws.onclose = function () {
+      console.log("🔴 WebSocket Disconnected");
+    };
+  } catch (e) {
+    console.log("WebSocket tidak tersedia");
+  }
 </script>
+
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 <?php if (isset($_SESSION['notif'])): ?>
@@ -567,6 +809,4 @@ Swal.fire({
   timerProgressBar: true
 });
 </script>
-
-
 <?php unset($_SESSION['notif']); endif; ?>
