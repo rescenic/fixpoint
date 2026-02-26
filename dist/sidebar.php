@@ -99,7 +99,7 @@ while ($row = mysqli_fetch_assoc($result)) {
 
 <li class="dropdown">
   <a href="#" class="nav-link has-dropdown">
-    <i class="fa fa-cog"></i>
+    <i class="fa fa-clipboard"></i>
     <span>PENGAJUAN</span>
   </a>
 
@@ -124,66 +124,81 @@ while ($row = mysqli_fetch_assoc($result)) {
     <?php endif; ?>
 
     <?php if (in_array('order_tiket_sarpras.php', $allowed_files)): ?>
-    <li>
-      <a class="nav-link" href="order_tiket_sarpras.php">
-        <i class="fa fa-wrench"></i>
-        <span>Tiket Sarpras</span>
-      </a>
-    </li>
+         <li>
+        <a class="nav-link" href="order_tiket_sarpras.php">
+          <i class="fa fa-wrench"></i>
+          <span>Tiket Sarpras</span>
+        </a>
+      </li>
     <?php endif; ?>
 
     <?php if (in_array('off_duty.php', $allowed_files)): ?>
     <li>
       <a class="nav-link" href="off_duty.php">
-        <i class="fa fa-user"></i>
+        <i class="fa fa-user-clock"></i>
         <span>Off-Duty</span>
       </a>
     </li>
     <?php endif; ?>
 
-   <?php if (in_array('izin_keluar.php', $allowed_files)): ?>
-<li>
-  <a class="nav-link" href="izin_keluar.php">
-    <i class="fa fa-share"></i>
-    <span>Izin Keluar</span>
-  </a>
-</li>
-<?php endif; ?>
+    <?php if (in_array('lembur.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="lembur.php">
+        <i class="fa fa-clock"></i>
+        <span>Lembur</span>
+      </a>
+    </li>
+    <?php endif; ?>
 
+    <?php if (in_array('izin_keluar.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="izin_keluar.php">
+        <i class="fa fa-sign-out-alt"></i>
+        <span>Izin Keluar</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+    <?php if (in_array('izin_pulang_cepat.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="izin_pulang_cepat.php">
+        <i class="fa fa-running"></i>
+        <span>Izin Pulang Cepat</span>
+      </a>
+    </li>
+    <?php endif; ?>
 
     <?php if (in_array('pengajuan_cuti.php', $allowed_files)): ?>
     <li>
       <a class="nav-link" href="pengajuan_cuti.php">
-        <i class="fa fa-calendar"></i>
+        <i class="fa fa-calendar-check"></i>
         <span>Pengajuan Cuti</span>
       </a>
     </li>
     <?php endif; ?>
 
-<?php if (in_array('ganti_jadwal_dinas.php', $allowed_files)): ?>
-<li>
-  <a class="nav-link" href="ganti_jadwal_dinas.php">
-    <i class="fa fa-retweet"></i>
-    <span>Ganti Jadwal</span>
-  </a>
-</li>
-<?php endif; ?>
+    <?php if (in_array('ganti_jadwal_dinas.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="ganti_jadwal_dinas.php">
+        <i class="fa fa-exchange-alt"></i>
+        <span>Ganti Jadwal</span>
+      </a>
+    </li>
+    <?php endif; ?>
 
-
-<?php if (in_array('edit_data_simrs.php', $allowed_files)): ?>
-<li>
-  <a class="nav-link" href="edit_data_simrs.php">
-    <i class="fa fa-edit"></i>
-    <span>Edit Data SIMRS</span>
-  </a>
-</li>
-<?php endif; ?>
-
+    <?php if (in_array('edit_data_simrs.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="edit_data_simrs.php">
+        <i class="fa fa-edit"></i>
+        <span>Edit Data SIMRS</span>
+      </a>
+    </li>
+    <?php endif; ?>
 
     <?php if (in_array('hapus_data.php', $allowed_files)): ?>
     <li>
       <a class="nav-link" href="hapus_data.php">
-        <i class="fa fa-trash"></i>
+        <i class="fa fa-trash-alt"></i>
         <span>Hapus Data SIMRS</span>
       </a>
     </li>
@@ -224,10 +239,10 @@ while ($row = mysqli_fetch_assoc($result)) {
     <?php endif; ?>
 
     <?php if (in_array('data_tiket_sarpras.php', $allowed_files)): ?>
-    <li>
-      <a class="nav-link" href="data_tiket_sarpras.php">
-        <i class="fa fa-wrench"></i>
-        <span>Data Tiket Sarpras</span>
+     <li>
+      <a class="nav-link" href="order_tiket_sarpras.php">
+        <i class="fa-building"></i>
+        <span>Tiket Sarpras</span>
       </a>
     </li>
     <?php endif; ?>
@@ -264,6 +279,35 @@ while ($row = mysqli_fetch_assoc($result)) {
       <a class="nav-link" href="data_cuti_delegasi.php">
         <i class="fa fa-users"></i>
         <span>ACC Cuti Delegasi</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+
+  <?php if (in_array('acc_lembur_atasan.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="acc_lembur_atasan.php">
+        <i class="fa fa-user"></i>
+        <span>ACC Lembur/Atasan</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+
+    <?php if (in_array('acc_lembur_sdm.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="acc_lembur_sdm.php">
+        <i class="fa fa-user"></i>
+        <span>ACC Lembur SDM</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+      <?php if (in_array('acc_pulang_cepat_sdm.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="acc_pulang_cepat_sdm.php">
+        <i class="fa fa-user"></i>
+        <span>ACC Pulang Cepat HR/SDM</span>
       </a>
     </li>
     <?php endif; ?>
@@ -762,6 +806,14 @@ try {
     <li>
       <a class="nav-link" href="data_cuti.php">
         <i class="fas fa-database"></i> <span>Data Cuti</span>
+      </a>
+    </li>
+    <?php endif; ?>
+
+     <?php if (in_array('data_lembur.php', $allowed_files)): ?>
+    <li>
+      <a class="nav-link" href="data_lembur.php">
+        <i class="fas fa-database"></i> <span>Data Lembur</span>
       </a>
     </li>
     <?php endif; ?>
@@ -1378,6 +1430,14 @@ try {
       <li>
         <a class="nav-link" href="master_url.php">
           <i class="fas fa-link"></i> <span>Master URL</span>
+        </a>
+      </li>
+    <?php endif; ?>
+
+     <?php if (in_array('backup_restore.php', $allowed_files)): ?>
+      <li>
+        <a class="nav-link" href="backup_restore.php">
+          <i class="fas fa-link"></i> <span>Backup Database</span>
         </a>
       </li>
     <?php endif; ?>

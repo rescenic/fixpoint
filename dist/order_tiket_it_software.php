@@ -53,9 +53,25 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
     }
 
     .table thead th {
-  background-color: #000 !important;
-  color: #fff !important;
-}
+      background-color: #000 !important;
+      color: #fff !important;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+
+    .action-buttons form {
+      margin: 0;
+    }
+    
+    .action-buttons a,
+    .action-buttons button {
+      white-space: nowrap;
+    }
   </style>
 </head>
 
@@ -70,7 +86,7 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
         <div class="section-body">
           <div class="card">
             <div class="card-header">
-              <h4>Order Tiket IT Software</h4>
+              <h4><i class="fas fa-laptop-code text-primary mr-2"></i>Order Tiket IT Software</h4>
             </div>
             <div class="card-body">
 
@@ -117,8 +133,12 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
                           <option value="">-- Pilih Kategori --</option>
                           <?php
                           $kategoriResult = mysqli_query($conn, "SELECT nama_kategori FROM kategori_software");
-                          while ($k = mysqli_fetch_assoc($kategoriResult)) {
-                            echo "<option value='{$k['nama_kategori']}'>{$k['nama_kategori']}</option>";
+                          if (mysqli_num_rows($kategoriResult) > 0) {
+                            while ($k = mysqli_fetch_assoc($kategoriResult)) {
+                              echo "<option value='{$k['nama_kategori']}'>{$k['nama_kategori']}</option>";
+                            }
+                          } else {
+                            echo "<option disabled>Tidak ada kategori</option>";
                           }
                           ?>
                         </select>
@@ -148,7 +168,7 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
                           <th>Catatan IT</th>
                           <th>Status</th>
                           <th>Validasi</th>
-                          <th>Ticket</th>
+                          <th>Aksi</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -166,16 +186,12 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
                                     <td>" . (!empty($row['catatan_it']) ? nl2br(htmlspecialchars($row['catatan_it'])) : '-') . "</td>
                                     <td><span class='badge badge-" . statusColor($row['status']) . "'>{$row['status']}</span></td>
                                     <td>" . renderValidasiButton($row['status_validasi'], $row['id']) . "</td>
-                                     <td>
-                                      <a href='cetak_tiket_it_software.php?id={$row['id']}' target='_blank' class='btn btn-sm btn-info' title='Lihat Tiket'>
-                                        <i class='fas fa-print'></i>
-                                      </a>
-                                    </td>
+                                    <td>" . renderActionButtons($row) . "</td>
                                   </tr>";
                             $no++;
                           }
                         } else {
-                          echo "<tr><td colspan='8' class='text-center'>Belum ada tiket.</td></tr>";
+                          echo "<tr><td colspan='9' class='text-center'>Belum ada tiket.</td></tr>";
                         }
 
                         function statusColor($status) {
@@ -184,6 +200,7 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
                             case 'diproses': return 'info';
                             case 'selesai': return 'success';
                             case 'ditolak': return 'danger';
+                            case 'tidak bisa diperbaiki': return 'dark';
                             default: return 'secondary';
                           }
                         }
@@ -195,11 +212,11 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
                                 <div class='d-flex gap-1'>
                                   <form method='post' action='validasi_tiket_software.php' style='display:inline-block; margin-right: 5px;'>
                                     <input type='hidden' name='tiket_id' value='$id'>
-                                    <button type='submit' name='validasi' class='btn btn-sm btn-success'>Terima</button>
+                                    <button type='submit' name='validasi' class='btn btn-sm btn-success' title='Terima'>Terima</button>
                                   </form>
-                                  <form method='post' action='validasi_tiket.php' style='display:inline-block;'>
+                                  <form method='post' action='validasi_tiket_software.php' style='display:inline-block;'>
                                     <input type='hidden' name='tiket_id' value='$id'>
-                                    <button type='submit' name='tolak' class='btn btn-sm btn-danger'>Tolak</button>
+                                    <button type='submit' name='tolak' class='btn btn-sm btn-danger' title='Tolak'>Tolak</button>
                                   </form>
                                 </div>";
                             case 'Diterima':
@@ -209,6 +226,30 @@ $keyword = isset($_GET['keyword']) ? trim($_GET['keyword']) : '';
                             default:
                               return "<span class='badge badge-secondary'>Tidak Diketahui</span>";
                           }
+                        }
+
+                        function renderActionButtons($row) {
+                          $buttons = "<div class='action-buttons'>";
+                          
+                          // Tombol Cetak - selalu tampil
+                          $buttons .= "
+                            <a href='cetak_tiket_it_software.php?id={$row['id']}' target='_blank' class='btn btn-sm btn-info' title='Cetak Tiket'>
+                              <i class='fas fa-print'></i>
+                            </a>";
+                          
+                          // Tombol Batal - hanya muncul jika status Menunggu dan belum divalidasi
+                          if ($row['status'] == 'Menunggu' && $row['status_validasi'] == 'Belum Validasi') {
+                            $buttons .= "
+                              <form method='post' action='batal_tiket_it_software.php' onsubmit='return confirm(\"Apakah Anda yakin ingin membatalkan tiket ini?\");'>
+                                <input type='hidden' name='tiket_id' value='{$row['id']}'>
+                                <button type='submit' name='batal' class='btn btn-sm btn-danger' title='Batalkan Tiket'>
+                                  <i class='fas fa-times'></i>
+                                </button>
+                              </form>";
+                          }
+                          
+                          $buttons .= "</div>";
+                          return $buttons;
                         }
                         ?>
                       </tbody>

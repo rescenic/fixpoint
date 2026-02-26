@@ -330,8 +330,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['email'], $_POST['passw
 
   <hr>
   <div class="text-center text-muted">
-    &copy; <?= date('Y') ?> FixPoint, V. 2. - .29.12.2025<br>
-    Info Trouble: <strong>M. Wira</strong> - <a href="tel:+6282177856209">0821-7784-6209</a>
+    &copy; <?= date('Y') ?> FixPoint, V. 3.0 - .23.03.2026<br>
+    Info Trouble: <strong>M. Wira, Sb. S. Kom</strong> - <a href="tel:+6282177856209">0821-7784-6209</a>
   </div>
 </div>
 

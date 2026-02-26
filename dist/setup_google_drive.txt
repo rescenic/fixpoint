@@ -1,0 +1,270 @@
+SETUP GOOGLE DRIVE AUTO UPLOAD
+📋 Panduan Lengkap Setup Google Drive untuk Backup Otomatis
+Dengan fitur ini, backup database akan otomatis diupload ke Google Drive setelah dibuat.
+
+🔧 STEP 1: Buat Service Account di Google Cloud
+1.1 Buka Google Cloud Console
+https://console.cloud.google.com
+1.2 Buat Project Baru (atau gunakan yang ada)
+
+Klik Select a project di navbar atas
+Klik NEW PROJECT
+Nama project: Fixpoint Backup (bebas)
+Klik CREATE
+
+1.3 Enable Google Drive API
+
+Di sidebar, klik APIs & Services > Library
+Search: Google Drive API
+Klik Google Drive API
+Klik ENABLE
+
+1.4 Buat Service Account
+
+Di sidebar, klik APIs & Services > Credentials
+Klik + CREATE CREDENTIALS
+Pilih Service Account
+Isi:
+
+Service account name: backup-uploader
+Service account ID: backup-uploader (auto-generated)
+
+
+Klik CREATE AND CONTINUE
+Role: Pilih Basic > Editor (atau skip)
+Klik DONE
+
+1.5 Download Credentials JSON
+
+Di halaman Credentials, cari service account yang baru dibuat
+Klik pada service account name
+Tab KEYS
+Klik ADD KEY > Create new key
+Pilih JSON
+Klik CREATE
+File JSON akan terdownload otomatis
+
+1.6 Copy Email Service Account
+Di halaman service account details, copy email address:
+backup-uploader@fixpoint-backup.iam.gserviceaccount.com
+SIMPAN EMAIL INI! Akan digunakan di langkah berikutnya.
+
+📁 STEP 2: Setup Folder Google Drive
+2.1 Buat Folder di Google Drive
+
+Buka Google Drive
+Klik + New > Folder
+Nama folder: Backup Database Fixpoint
+Klik CREATE
+
+2.2 Share Folder dengan Service Account
+
+Klik kanan pada folder
+Pilih Share
+Paste email service account yang dicopy tadi
+Set permission: Editor
+UNCHECK "Notify people"
+Klik Share
+
+2.3 Copy Folder ID
+
+Buka folder yang baru dibuat
+Lihat URL di browser:
+
+https://drive.google.com/drive/folders/1A2B3C4D5E6F7G8H9I0J
+                                         ^^^^^^^^^^^^^^^^^^^^^
+                                         INI FOLDER ID NYA
+
+COPY FOLDER ID (bagian setelah /folders/)
+
+Contoh: 1A2B3C4D5E6F7G8H9I0J
+
+💻 STEP 3: Setup di Server
+3.1 Upload Credentials File
+
+Rename file JSON yang didownload menjadi: gdrive-credentials.json
+Upload ke root folder aplikasi fixpoint (sama level dengan backup_database.php)
+Set permission:
+
+bashchmod 600 gdrive-credentials.json
+3.2 Upload Helper File
+
+Upload file gdrive_helper.php ke root folder
+Set permission:
+
+bashchmod 644 gdrive_helper.php
+3.3 Install Google API Client
+Di server, jalankan:
+bashcd /path/to/fixpoint
+composer require google/apiclient:"^2.0"
+Atau jika tidak ada composer, download manual:
+bashwget https://github.com/googleapis/google-api-php-client/archive/refs/tags/v2.15.0.zip
+unzip v2.15.0.zip
+mv google-api-php-client-2.15.0 vendor/google
+
+⚙️ STEP 4: Konfigurasi di Aplikasi Fixpoint
+4.1 Login ke Fixpoint
+
+Login sebagai admin
+Buka menu Backup Database
+
+4.2 Klik Tombol Pengaturan (pada card Backup Otomatis)
+4.3 Aktifkan Google Drive Upload
+
+Scroll ke bawah sampai section "Upload Otomatis ke Google Drive"
+Toggle ON: "Auto Upload ke GDrive"
+Paste Folder ID yang sudah dicopy ke field "Folder ID Google Drive"
+Klik Simpan Pengaturan
+
+
+✅ STEP 5: Test Upload
+5.1 Test Manual via Browser
+Buka URL:
+https://yourdomain.com/cron_backup.php
+5.2 Cek Log
+bashcat backups/backup_log.txt
+Harus ada log seperti:
+[2026-02-05 08:00:00] Mengupload ke Google Drive...
+[2026-02-05 08:00:15] Upload ke Google Drive berhasil! File ID: xxxxx
+5.3 Cek Google Drive
+
+Buka folder di Google Drive
+Seharusnya ada file backup baru: auto_backup_fixpoint_system_2026-02-05_08-00-00.sql
+
+
+🔍 TROUBLESHOOTING
+Error: "Credentials file not found"
+Solusi:
+
+Pastikan file gdrive-credentials.json ada di root folder
+Cek nama file (huruf kecil semua)
+Cek permission: chmod 600 gdrive-credentials.json
+
+Error: "Google API Client not installed"
+Solusi:
+bashcd /path/to/fixpoint
+composer require google/apiclient:"^2.0"
+Atau download manual dan letakkan di folder vendor/
+Error: "The caller does not have permission"
+Solusi:
+
+Pastikan folder sudah di-share dengan email service account
+Set permission Editor (bukan Viewer)
+Pastikan Folder ID benar
+
+Upload gagal tapi tidak ada error
+Solusi:
+
+Cek log: cat backups/backup_log.txt
+Cek apakah gdrive_helper.php ada
+Test credentials:
+
+bashphp -r "require 'gdrive_helper.php'; $g = new GoogleDriveBackup(); echo 'OK';"
+File tidak muncul di Google Drive
+Solusi:
+
+Cek quota Google Drive (15 GB free)
+Refresh folder Google Drive
+Cek folder ID apakah benar
+Lihat di "Shared with me" jika folder tidak muncul
+
+
+📊 MONITORING
+Cek Status Upload di Log
+bashtail -f backups/backup_log.txt
+Cek File di Google Drive
+Via web: https://drive.google.com
+Cek Quota Google Drive
+
+Buka Google Drive
+Klik Storage di sidebar kiri
+Lihat penggunaan storage
+
+
+🔒 KEAMANAN
+Best Practices:
+
+✅ Simpan credentials.json aman
+
+bash   chmod 600 gdrive-credentials.json
+
+✅ Jangan commit credentials ke Git
+Tambahkan di .gitignore:
+
+   gdrive-credentials.json
+
+✅ Rotate Service Account Key
+
+Setiap 90 hari
+Generate key baru
+Delete key lama
+
+
+✅ Monitor Aktivitas
+
+Cek Google Cloud Console > Activity
+Alert jika ada aktivitas mencurigakan
+
+
+✅ Batasi Permission
+
+Service account hanya akses 1 folder
+Jangan beri akses ke entire Drive
+
+
+
+
+💰 BIAYA
+Google Drive Free Tier:
+
+15 GB storage gratis
+Shared dengan Gmail & Google Photos
+
+Estimasi Penggunaan:
+
+Backup database (misal 500 KB)
+Backup daily = 500 KB x 30 hari = 15 MB/bulan
+Sangat hemat! Cukup dengan free tier
+
+Jika Perlu Lebih:
+
+Google One: 100 GB = Rp 26,900/bulan
+Google Workspace: Storage unlimited
+
+
+🎯 TIPS & TRICKS
+1. Compress Backup Sebelum Upload
+Edit cron_backup.php, tambahkan sebelum upload:
+php// Compress file
+$zip = new ZipArchive();
+$zip_file = $filepath . '.zip';
+$zip->open($zip_file, ZipArchive::CREATE);
+$zip->addFile($filepath, basename($filepath));
+$zip->close();
+
+// Upload zip instead
+uploadToGoogleDrive($zip_file, $folder_id);
+2. Organize by Date
+Buat subfolder per bulan di Google Drive:
+Backup Database/
+  └── 2026/
+      └── 02-February/
+          └── auto_backup_...sql
+3. Email Notification
+Tambahkan setelah upload sukses:
+phpif ($gdrive_result['success']) {
+    mail('admin@domain.com', 
+         'Backup Success', 
+         'Backup uploaded to Google Drive: ' . $gdrive_result['web_link']);
+}
+
+📞 SUPPORT
+Jika masih ada masalah:
+
+Cek dokumentasi Google: https://developers.google.com/drive
+Lihat error log: backups/backup_log.txt
+Test manual: buka cron_backup.php di browser
+
+
+Selamat! Backup otomatis Anda sekarang tersimpan aman di Google Drive! 🎉
+Database akan di-backup dan diupload otomatis setiap hari sesuai jadwal yang Anda tentukan.

@@ -2,7 +2,7 @@
 // check_integrity.php
 
 $sidebar_path = __DIR__ . '/sidebar.php';
-$expected_hash = '6e87a43b0f91a61e590890ecd14686b5c13ec99c'; 
+$expected_hash = '76fb0b05337b92a0e51b29d0da6dcff41747c477'; 
 
 if (!file_exists($sidebar_path)) {
     die('

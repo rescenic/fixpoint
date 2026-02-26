@@ -1,172 +1,205 @@
 <?php
-// rekap_laporan_input_harian.php
+// capaian_imut.php
 include 'security.php';
 include 'koneksi.php';
 date_default_timezone_set('Asia/Jakarta');
 
-$user_id = $_SESSION['user_id'] ?? 0;
+$user_id   = $_SESSION['user_id'] ?? 0;
 $nama_user = '';
 if ($user_id > 0) {
-    $qUser = mysqli_query($conn, "SELECT nama FROM users WHERE id = '".intval($user_id)."' LIMIT 1");
-    if ($qUser && $rowU = mysqli_fetch_assoc($qUser)) {
-        $nama_user = $rowU['nama'];
-    }
+    $qUser = mysqli_query($conn, "SELECT nama FROM users WHERE id='" . intval($user_id) . "' LIMIT 1");
+    if ($qUser && $rowU = mysqli_fetch_assoc($qUser)) $nama_user = $rowU['nama'];
 }
 
-// akses menu
+// Cek akses menu
 $current_file = basename(__FILE__);
-$rAkses = mysqli_query($conn, "SELECT 1 FROM akses_menu 
-            JOIN menu ON akses_menu.menu_id = menu.id 
-            WHERE akses_menu.user_id = '".intval($user_id)."' 
-            AND menu.file_menu = '".mysqli_real_escape_string($conn,$current_file)."'");
+$rAkses = mysqli_query($conn, "SELECT 1 FROM akses_menu
+    JOIN menu ON akses_menu.menu_id = menu.id
+    WHERE akses_menu.user_id='" . intval($user_id) . "'
+    AND menu.file_menu='" . mysqli_real_escape_string($conn, $current_file) . "'");
 if (!$rAkses || mysqli_num_rows($rAkses) == 0) {
-    echo "<script>alert('Anda tidak memiliki akses ke halaman ini.'); window.location.href='dashboard.php';</script>";
+    echo "<script>alert('Anda tidak memiliki akses.');window.location.href='dashboard.php';</script>";
     exit;
 }
 
-// Filter
-$bulan = isset($_GET['bulan']) ? intval($_GET['bulan']) : date('n');
-$tahun = isset($_GET['tahun']) ? intval($_GET['tahun']) : date('Y');
-$jenis_indikator = isset($_GET['jenis']) ? mysqli_real_escape_string($conn, $_GET['jenis']) : '';
-$id_indikator = isset($_GET['indikator']) ? intval($_GET['indikator']) : 0;
+// ===================================================
+// FILTER
+// ===================================================
+$bulan         = isset($_GET['bulan'])   ? intval($_GET['bulan'])   : date('n');
+$tahun         = isset($_GET['tahun'])   ? intval($_GET['tahun'])   : date('Y');
+$filter_jenis  = isset($_GET['jenis'])   ? mysqli_real_escape_string($conn, $_GET['jenis']) : '';
+$filter_status = isset($_GET['status'])  ? mysqli_real_escape_string($conn, $_GET['status']) : ''; // tercapai / tidak_tercapai / belum_validasi
+$filter_unit   = isset($_GET['unit_id']) ? intval($_GET['unit_id']) : 0;
 
-// Proses Validasi
-if (isset($_POST['validasi'])) {
-    $jenis = mysqli_real_escape_string($conn, $_POST['jenis_validasi']);
-    $id_ind = intval($_POST['id_indikator_validasi']);
-    $bulan_val = intval($_POST['bulan_validasi']);
-    $tahun_val = intval($_POST['tahun_validasi']);
-    $status = mysqli_real_escape_string($conn, $_POST['status_validasi']);
-    $catatan = mysqli_real_escape_string($conn, $_POST['catatan_validasi']);
-    
-    // Update semua data untuk indikator ini di bulan yang sama
-    $q = "UPDATE indikator_harian SET 
-          status_validasi='$status',
-          validasi_oleh='$nama_user',
-          validasi_tanggal=NOW(),
-          catatan_validasi='$catatan'
-          WHERE jenis_indikator='$jenis' 
-          AND id_indikator='$id_ind'
-          AND MONTH(tanggal)='$bulan_val' 
-          AND YEAR(tanggal)='$tahun_val'";
-    
-    if (mysqli_query($conn, $q)) {
-        $_SESSION['flash_message'] = "Validasi berhasil disimpan untuk semua data bulan ini.";
-        $_SESSION['flash_type'] = "success";
-    } else {
-        $_SESSION['flash_message'] = "Gagal validasi: " . mysqli_error($conn);
-        $_SESSION['flash_type'] = "danger";
-    }
-    header("Location: rekap_laporan_input_harian.php?bulan=$bulan&tahun=$tahun&jenis=$jenis_indikator&indikator=$id_indikator");
-    exit;
-}
+$namaBulan = ['', 'Januari','Februari','Maret','April','Mei','Juni',
+              'Juli','Agustus','September','Oktober','November','Desember'];
 
-// Ambil daftar indikator untuk filter
-$listNasional = mysqli_query($conn, "SELECT id_nasional AS id, nama_indikator, penanggung_jawab FROM indikator_nasional ORDER BY nama_indikator");
-$listRS = mysqli_query($conn, "SELECT id_rs AS id, nama_indikator, penanggung_jawab FROM indikator_rs ORDER BY nama_indikator");
-$listUnit = mysqli_query($conn, "SELECT id_unit AS id, nama_indikator, penanggung_jawab FROM indikator_unit ORDER BY nama_indikator");
-
-$indikatorList = [];
-while($row = mysqli_fetch_assoc($listNasional)) $indikatorList['nasional'][] = $row;
-while($row = mysqli_fetch_assoc($listRS)) $indikatorList['rs'][] = $row;
-while($row = mysqli_fetch_assoc($listUnit)) $indikatorList['unit'][] = $row;
-
-// Jumlah hari dalam bulan
 $jumlahHari = date('t', mktime(0, 0, 0, $bulan, 1, $tahun));
 
-// Query data berdasarkan filter
-$whereClause = "WHERE MONTH(h.tanggal) = $bulan AND YEAR(h.tanggal) = $tahun";
-if ($jenis_indikator) {
-    $whereClause .= " AND h.jenis_indikator = '$jenis_indikator'";
-}
-if ($id_indikator > 0) {
-    $whereClause .= " AND h.id_indikator = $id_indikator";
+// ===================================================
+// DAFTAR UNIT untuk filter
+// ===================================================
+$listUnit = mysqli_query($conn, "SELECT id, nama_unit FROM unit_kerja ORDER BY nama_unit");
+
+// ===================================================
+// AMBIL SEMUA INDIKATOR YANG ADA DATA DI BULAN INI
+// ===================================================
+$whereBase = "WHERE MONTH(h.tanggal)=$bulan AND YEAR(h.tanggal)=$tahun";
+if ($filter_jenis)  $whereBase .= " AND h.jenis_indikator='$filter_jenis'";
+if ($filter_unit > 0) {
+    $whereBase .= " AND (
+        (h.jenis_indikator='unit' AND EXISTS (
+            SELECT 1 FROM indikator_unit iu WHERE iu.id_unit=h.id_indikator AND iu.unit_id=$filter_unit
+        ))
+    )";
 }
 
-$modals = [];
+$qInd = mysqli_query($conn, "SELECT DISTINCT h.jenis_indikator, h.id_indikator
+    FROM indikator_harian h $whereBase
+    ORDER BY h.jenis_indikator, h.id_indikator");
+
+// ===================================================
+// KUMPULKAN DATA SEMUA INDIKATOR
+// ===================================================
+$allData    = [];
+$rekapRingkas = ['total' => 0, 'tercapai' => 0, 'tidak_tercapai' => 0,
+                 'tervalidasi' => 0, 'belum_validasi' => 0, 'total_jam' => 0];
+
+while ($indRow = mysqli_fetch_assoc($qInd)) {
+    $jenis = $indRow['jenis_indikator'];
+    $idInd = $indRow['id_indikator'];
+
+    // Ambil info indikator
+    if ($jenis == 'nasional') {
+        $qInfo = mysqli_query($conn, "SELECT nama_indikator, standar, numerator AS num_def, denominator AS den_def,
+            penanggung_jawab, '' AS nama_unit FROM indikator_nasional WHERE id_nasional=$idInd");
+    } elseif ($jenis == 'rs') {
+        $qInfo = mysqli_query($conn, "SELECT r.nama_indikator, r.standar, r.numerator AS num_def, r.denominator AS den_def,
+            u.nama AS penanggung_jawab, '' AS nama_unit
+            FROM indikator_rs r LEFT JOIN users u ON r.penanggung_jawab=u.id WHERE r.id_rs=$idInd");
+    } else {
+        $qInfo = mysqli_query($conn, "SELECT iu.nama_indikator, iu.standar, iu.numerator AS num_def, iu.denominator AS den_def,
+            u.nama AS penanggung_jawab, uk.nama_unit
+            FROM indikator_unit iu
+            LEFT JOIN users u  ON iu.penanggung_jawab=u.id
+            LEFT JOIN unit_kerja uk ON iu.unit_id=uk.id
+            WHERE iu.id_unit=$idInd");
+    }
+
+    if (!$qInfo || !($info = mysqli_fetch_assoc($qInfo))) continue;
+
+    // Ambil data harian
+    $qData = mysqli_query($conn, "SELECT DAY(tanggal) AS hari, numerator, denominator,
+        status_validasi, validasi_oleh, validasi_tanggal, tte_token, catatan_validasi
+        FROM indikator_harian h $whereBase
+        AND h.jenis_indikator='$jenis' AND h.id_indikator=$idInd
+        ORDER BY tanggal");
+
+    $harian          = [];
+    $totalNum        = 0;
+    $totalDen        = 0;
+    $statusValidasi  = '';
+    $validasiOleh    = '';
+    $validasiTanggal = '';
+    $tteToken        = '';
+    $catatanValidasi = '';
+
+    while ($d = mysqli_fetch_assoc($qData)) {
+        $harian[$d['hari']] = $d;
+        $totalNum += $d['numerator'];
+        $totalDen += $d['denominator'];
+        if (!empty($d['status_validasi'])) {
+            $statusValidasi  = $d['status_validasi'];
+            $validasiOleh    = $d['validasi_oleh'];
+            $validasiTanggal = $d['validasi_tanggal'];
+            $tteToken        = $d['tte_token'];
+            $catatanValidasi = $d['catatan_validasi'];
+        }
+    }
+
+    $persen = ($totalDen > 0) ? round($totalNum / $totalDen * 100, 2) : 0;
+    $standar = floatval($info['standar']);
+    $tercapai = ($persen >= $standar);
+
+    // Filter status
+    if ($filter_status == 'tercapai' && !$tercapai) continue;
+    if ($filter_status == 'tidak_tercapai' && $tercapai) continue;
+    if ($filter_status == 'belum_validasi' && $statusValidasi == 'tervalidasi') continue;
+
+    $allData[] = [
+        'jenis'           => $jenis,
+        'id'              => $idInd,
+        'nama'            => $info['nama_indikator'],
+        'standar'         => $standar,
+        'num_def'         => $info['num_def'],
+        'den_def'         => $info['den_def'],
+        'pj'              => $info['penanggung_jawab'],
+        'unit'            => $info['nama_unit'] ?? '',
+        'harian'          => $harian,
+        'totalNum'        => $totalNum,
+        'totalDen'        => $totalDen,
+        'persen'          => $persen,
+        'tercapai'        => $tercapai,
+        'statusValidasi'  => $statusValidasi,
+        'validasiOleh'    => $validasiOleh,
+        'validasiTanggal' => $validasiTanggal,
+        'tteToken'        => $tteToken,
+        'catatanValidasi' => $catatanValidasi,
+    ];
+
+    // Rekap ringkas
+    $rekapRingkas['total']++;
+    if ($tercapai) $rekapRingkas['tercapai']++; else $rekapRingkas['tidak_tercapai']++;
+    if ($statusValidasi == 'tervalidasi') $rekapRingkas['tervalidasi']++; else $rekapRingkas['belum_validasi']++;
+}
 ?>
 <!doctype html>
 <html lang="id">
 <head>
   <meta charset="utf-8">
-  <title>Rekap Laporan Input Harian</title>
+  <title>Capaian Indikator Mutu – PMKP</title>
   <link rel="stylesheet" href="assets/modules/bootstrap/css/bootstrap.min.css">
   <link rel="stylesheet" href="assets/modules/fontawesome/css/all.min.css">
   <link rel="stylesheet" href="assets/css/style.css">
   <link rel="stylesheet" href="assets/css/components.css">
-  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
   <style>
     .table-rekap { font-size: 11px; }
-    .table-rekap th, .table-rekap td { 
-      padding: 4px; 
-      text-align: center; 
+    .table-rekap th, .table-rekap td {
+      padding: 4px;
+      text-align: center;
       vertical-align: middle;
       border: 1px solid #dee2e6;
     }
     .table-rekap th { background: #f8f9fa; font-weight: 600; }
-    .table-rekap .indikator-name { 
-      text-align: left; 
+    .table-rekap .cell-nama {
+      text-align: left;
       font-weight: 500;
-      min-width: 250px;
-      max-width: 350px;
+      min-width: 120px;
     }
+    .day-cell { min-width: 28px; }
+    .total-cell { background: #e9ecef; font-weight: 700; }
+    .formula-text { font-size: 10px; color: #555; font-style: italic; margin-bottom: 8px; }
     .flash-center {
       position: fixed; top: 20%; left: 50%; transform: translate(-50%, -50%);
       z-index: 9999; min-width: 300px; max-width: 90%; text-align: center;
       padding: 15px; border-radius: 8px; font-weight: 500;
       box-shadow: 0 5px 15px rgba(0,0,0,0.3);
     }
-    .badge-validasi { font-size: 10px; padding: 3px 6px; }
     .filter-card { background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
-    .btn-validasi { padding: 2px 8px; font-size: 11px; }
-    .day-cell { min-width: 30px; }
-    .total-cell { background: #e9ecef; font-weight: 700; }
-    .formula-text { font-size: 10px; color: #000; font-style: italic; margin-bottom: 10px; }
-    .validasi-info { 
-      background: #d4edda; 
-      padding: 8px; 
-      border-radius: 5px; 
-      margin-top: 5px;
-      font-size: 11px;
-    }
-    .validasi-info.ditolak { background: #f8d7da; }
-    
-    /* Chart Modal */
-    .chart-container {
-      position: relative;
-      height: 400px;
-      width: 100%;
-    }
-    
-    /* Print Styles */
+    .num-row td  { background: #f0fff0; }
+    .den-row td  { background: #fffbf0; }
+    .pct-row td  { background: #f0f4ff; font-size: 10px; font-style: italic; }
+    .pct-ok   { color: #155724; font-weight: 700; }
+    .pct-fail { color: #721c24; font-weight: 700; }
+    .validasi-info { font-size: 10px; }
+    .chart-modal-body { position: relative; height: 400px; }
     @media print {
-      .main-sidebar, .navbar, .card-header-action, .filter-card, .btn, .no-print {
-        display: none !important;
-      }
-      .main-content {
-        margin-left: 0 !important;
-        padding: 0 !important;
-      }
-      .card {
-        border: none !important;
-        box-shadow: none !important;
-      }
-      .table-rekap {
-        font-size: 9px;
-      }
-      .table-rekap th, .table-rekap td {
-        padding: 2px;
-      }
-      body {
-        background: white !important;
-      }
-      .page-break {
-        page-break-after: always;
-      }
-      @page {
-        size: A4 landscape;
-        margin: 10mm;
-      }
+      .main-sidebar, .navbar, .card-header-action, .filter-card, .btn, .no-print { display: none !important; }
+      .main-content { margin-left: 0 !important; padding: 0 !important; }
+      .card { border: none !important; box-shadow: none !important; }
+      .table-rekap { font-size: 8px; }
+      .table-rekap th, .table-rekap td { padding: 2px; }
+      @page { size: A4 landscape; margin: 10mm; }
     }
   </style>
 </head>
@@ -179,44 +212,40 @@ $modals = [];
       <section class="section">
         <div class="section-body">
 
-        <?php if(isset($_SESSION['flash_message'])): 
-            $flashType = $_SESSION['flash_type'] ?? 'info';
-        ?>
-          <div class="alert alert-<?= $flashType ?> flash-center" id="flashMsg">
-            <i class="fas fa-<?= $flashType=='success'?'check-circle':($flashType=='danger'?'exclamation-circle':'info-circle') ?>"></i>
-            <?= htmlspecialchars($_SESSION['flash_message']); 
-                unset($_SESSION['flash_message']); 
-                unset($_SESSION['flash_type']); 
-            ?>
+        <?php if(isset($_SESSION['flash_message'])): $ft = $_SESSION['flash_type'] ?? 'info'; ?>
+          <div class="alert alert-<?= $ft ?> flash-center" id="flashMsg">
+            <i class="fas fa-<?= $ft=='success'?'check-circle':($ft=='danger'?'exclamation-circle':'info-circle') ?>"></i>
+            <?= htmlspecialchars($_SESSION['flash_message']); unset($_SESSION['flash_message'], $_SESSION['flash_type']); ?>
           </div>
         <?php endif; ?>
 
         <div class="card">
           <div class="card-header">
-            <h4><i class="fas fa-file-alt"></i> Rekap Laporan Input Harian</h4>
-            <div class="card-header-action">
-              <button class="btn btn-success" onclick="exportExcel()">
+            <h4><i class="fas fa-chart-pie"></i> Capaian Indikator Mutu – PMKP</h4>
+            <div class="card-header-action no-print">
+              <button class="btn btn-danger btn-sm" onclick="window.open('cetak_imut.php?<?= http_build_query(['bulan'=>$bulan,'tahun'=>$tahun,'jenis'=>$filter_jenis,'status'=>$filter_status,'unit_id'=>$filter_unit]) ?>','_blank')">
+                <i class="fas fa-file-pdf"></i> Cetak PDF
+              </button>
+              <button class="btn btn-success btn-sm ml-1" onclick="exportExcel()">
                 <i class="fas fa-file-excel"></i> Export Excel
               </button>
-              <button class="btn btn-primary" onclick="printLaporan()">
-                <i class="fas fa-print"></i> Cetak Laporan
+              <button class="btn btn-secondary btn-sm ml-1" onclick="window.print()">
+                <i class="fas fa-print"></i> Print
               </button>
             </div>
           </div>
           <div class="card-body">
-            
-            <!-- Filter -->
-            <div class="filter-card">
-              <form method="GET" id="filterForm">
+
+            <!-- FILTER -->
+            <div class="filter-card no-print">
+              <form method="GET">
                 <div class="row">
                   <div class="col-md-2">
                     <div class="form-group mb-2">
                       <label><i class="fas fa-calendar"></i> Bulan</label>
                       <select name="bulan" class="form-control" onchange="this.form.submit()">
-                        <?php for($m=1; $m<=12; $m++): ?>
-                          <option value="<?= $m ?>" <?= ($bulan==$m)?'selected':'' ?>>
-                            <?= date('F', mktime(0,0,0,$m,1)) ?>
-                          </option>
+                        <?php for($m=1;$m<=12;$m++): ?>
+                        <option value="<?=$m?>" <?=($bulan==$m)?'selected':''?>><?=$namaBulan[$m]?></option>
                         <?php endfor; ?>
                       </select>
                     </div>
@@ -225,531 +254,195 @@ $modals = [];
                     <div class="form-group mb-2">
                       <label><i class="fas fa-calendar-alt"></i> Tahun</label>
                       <select name="tahun" class="form-control" onchange="this.form.submit()">
-                        <?php for($y=date('Y')-2; $y<=date('Y')+1; $y++): ?>
-                          <option value="<?= $y ?>" <?= ($tahun==$y)?'selected':'' ?>><?= $y ?></option>
+                        <?php for($y=date('Y')-2;$y<=date('Y')+1;$y++): ?>
+                        <option value="<?=$y?>" <?=($tahun==$y)?'selected':''?>><?=$y?></option>
                         <?php endfor; ?>
                       </select>
                     </div>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-2">
                     <div class="form-group mb-2">
-                      <label><i class="fas fa-layer-group"></i> Jenis Indikator</label>
-                      <select name="jenis" id="jenisFilter" class="form-control" onchange="updateIndikatorFilter()">
+                      <label><i class="fas fa-layer-group"></i> Jenis</label>
+                      <select name="jenis" class="form-control">
                         <option value="">-- Semua Jenis --</option>
-                        <option value="nasional" <?= ($jenis_indikator=='nasional')?'selected':'' ?>>Indikator Nasional</option>
-                        <option value="rs" <?= ($jenis_indikator=='rs')?'selected':'' ?>>Indikator RS</option>
-                        <option value="unit" <?= ($jenis_indikator=='unit')?'selected':'' ?>>Indikator Unit</option>
+                        <option value="nasional" <?=($filter_jenis=='nasional')?'selected':''?>>Nasional</option>
+                        <option value="rs"       <?=($filter_jenis=='rs')?'selected':''?>>RS</option>
+                        <option value="unit"     <?=($filter_jenis=='unit')?'selected':''?>>Unit</option>
                       </select>
                     </div>
                   </div>
-                  <div class="col-md-3">
+                  <div class="col-md-2">
                     <div class="form-group mb-2">
-                      <label><i class="fas fa-list"></i> Indikator</label>
-                      <select name="indikator" id="indikatorFilter" class="form-control select2">
-                        <option value="">-- Semua Indikator --</option>
+                      <label><i class="fas fa-hospital"></i> Unit Kerja</label>
+                      <select name="unit_id" class="form-control">
+                        <option value="0">-- Semua Unit --</option>
+                        <?php mysqli_data_seek($listUnit,0); while($u=mysqli_fetch_assoc($listUnit)): ?>
+                        <option value="<?=$u['id']?>" <?=($filter_unit==$u['id'])?'selected':''?>><?=htmlspecialchars($u['nama_unit'])?></option>
+                        <?php endwhile; ?>
+                      </select>
+                    </div>
+                  </div>
+                  <div class="col-md-2">
+                    <div class="form-group mb-2">
+                      <label><i class="fas fa-flag"></i> Status Capaian</label>
+                      <select name="status" class="form-control">
+                        <option value="">-- Semua Status --</option>
+                        <option value="tercapai"       <?=($filter_status=='tercapai')?'selected':''?>>Tercapai</option>
+                        <option value="tidak_tercapai" <?=($filter_status=='tidak_tercapai')?'selected':''?>>Tidak Tercapai</option>
+                        <option value="belum_validasi" <?=($filter_status=='belum_validasi')?'selected':''?>>Belum Validasi</option>
                       </select>
                     </div>
                   </div>
                   <div class="col-md-2">
                     <div class="form-group mb-2">
                       <label>&nbsp;</label>
-                      <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fas fa-search"></i> Filter
-                      </button>
+                      <div>
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> Filter</button>
+                        <a href="capaian_imut.php" class="btn btn-secondary ml-1"><i class="fas fa-redo"></i></a>
+                      </div>
                     </div>
                   </div>
                 </div>
               </form>
             </div>
 
-            <!-- Tabel Rekap -->
-            <?php
-            // Query untuk mendapatkan indikator yang ada datanya
-            $qIndikator = mysqli_query($conn, "SELECT DISTINCT h.jenis_indikator, h.id_indikator
-                                               FROM indikator_harian h
-                                               $whereClause
-                                               ORDER BY h.jenis_indikator, h.id_indikator");
-            
-            if (mysqli_num_rows($qIndikator) > 0):
-              $chartIndex = 0;
-              while($indRow = mysqli_fetch_assoc($qIndikator)):
-                $jenis = $indRow['jenis_indikator'];
-                $idInd = $indRow['id_indikator'];
-                $chartIndex++;
-                
-                // Ambil data indikator dan penanggung jawab
-                $namaIndikator = '';
-                $penanggungJawab = '';
-                $standar = 0;
-                $numeratorDef = '';
-                $denominatorDef = '';
-                
-                if ($jenis == 'nasional') {
-                    $qInfo = mysqli_query($conn, "SELECT n.nama_indikator, n.standar, n.numerator, n.denominator, n.penanggung_jawab 
-                                                   FROM indikator_nasional n
-                                                   WHERE n.id_nasional = $idInd");
-                } elseif ($jenis == 'rs') {
-                    $qInfo = mysqli_query($conn, "SELECT r.nama_indikator, r.standar, r.numerator, r.denominator, u.nama as penanggung_jawab 
-                                                   FROM indikator_rs r
-                                                   LEFT JOIN users u ON r.penanggung_jawab = u.id
-                                                   WHERE r.id_rs = $idInd");
-                } else {
-                    $qInfo = mysqli_query($conn, "SELECT i.nama_indikator, i.standar, i.numerator, i.denominator, u.nama as penanggung_jawab 
-                                                   FROM indikator_unit i
-                                                   LEFT JOIN users u ON i.penanggung_jawab = u.id
-                                                   WHERE i.id_unit = $idInd");
-                }
-                
-                if ($qInfo && $infoRow = mysqli_fetch_assoc($qInfo)) {
-                    $namaIndikator = $infoRow['nama_indikator'];
-                    $penanggungJawab = $infoRow['penanggung_jawab'] ?? '-';
-                    $standar = $infoRow['standar'];
-                    $numeratorDef = $infoRow['numerator'] ?? '';
-                    $denominatorDef = $infoRow['denominator'] ?? '';
-                }
-                
-                // Cek apakah user adalah penanggung jawab
-                $isPeranggungJawab = ($nama_user == $penanggungJawab);
-                
-                // Query data harian untuk indikator ini
-                $qData = mysqli_query($conn, "SELECT h.*, DAY(h.tanggal) as hari
-                                              FROM indikator_harian h
-                                              WHERE h.jenis_indikator = '$jenis' 
-                                              AND h.id_indikator = $idInd
-                                              AND MONTH(h.tanggal) = $bulan 
-                                              AND YEAR(h.tanggal) = $tahun
-                                              ORDER BY h.tanggal");
-                
-                $dataHarian = [];
-                $totalNumerator = 0;
-                $totalDenominator = 0;
-                $statusValidasi = '';
-                $catatanValidasi = '';
-                $validasiOleh = '';
-                $validasiTanggal = '';
-                
-                // Array untuk grafik
-                $chartLabels = [];
-                $chartData = [];
-                
-                // Inisialisasi semua tanggal dengan 0
-                for ($d = 1; $d <= $jumlahHari; $d++) {
-                    $chartLabels[] = $d;
-                    $chartData[] = 0;
-                }
-                
-                while($dataRow = mysqli_fetch_assoc($qData)) {
-                    $hari = $dataRow['hari'];
-                    $dataHarian[$hari] = $dataRow;
-                    $totalNumerator += $dataRow['numerator'];
-                    $totalDenominator += $dataRow['denominator'];
-                    
-                    // Data untuk grafik - hitung persentase per hari
-                    $persen = ($dataRow['denominator'] > 0) ? ($dataRow['numerator'] / $dataRow['denominator'] * 100) : 0;
-                    $chartData[$hari - 1] = round($persen, 2); // Array index starts from 0
-                    
-                    // Status validasi
-                    if($dataRow['status_validasi']) {
-                        $statusValidasi = $dataRow['status_validasi'];
-                        $catatanValidasi = $dataRow['catatan_validasi'];
-                        $validasiOleh = $dataRow['validasi_oleh'];
-                        $validasiTanggal = $dataRow['validasi_tanggal'];
-                    }
-                }
-                
-                $persentaseTotal = ($totalDenominator > 0) ? ($totalNumerator / $totalDenominator * 100) : 0;
-                ?>
-                
-                <div class="mb-4">
-                  <h6 class="mb-2">
-                    <span class="badge badge-primary"><?= strtoupper($jenis) ?></span>
-                    <?= htmlspecialchars($namaIndikator) ?>
-                    <small class="text-muted">(Penanggung Jawab: <?= htmlspecialchars($penanggungJawab) ?>)</small>
-                  </h6>
-                  <div class="formula-text">
-                    <strong>Numerator:</strong> <?= htmlspecialchars($numeratorDef) ?> | 
-                    <strong>Denominator:</strong> <?= htmlspecialchars($denominatorDef) ?> | 
-                    <strong>Standar:</strong> <?= $standar ?>%
-                  </div>
-                  
-                  <div class="table-responsive">
-                    <table class="table table-bordered table-rekap table-sm">
-                      <thead>
-                        <tr>
-                          <th rowspan="2" class="indikator-name">Indikator Mutu</th>
-                          <?php for($d=1; $d<=$jumlahHari; $d++): ?>
-                            <th class="day-cell"><?= $d ?></th>
-                          <?php endfor; ?>
-                          <th rowspan="2" class="total-cell">Total</th>
-                          <th rowspan="2">Capaian</th>
-                          <th rowspan="2" width="200">Validasi</th>
-                          <th rowspan="2" width="80">Grafik</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <!-- Row Numerator -->
-                        <tr>
-                          <td class="indikator-name">Numerator</td>
-                          <?php for($d=1; $d<=$jumlahHari; $d++): ?>
-                            <td><?= isset($dataHarian[$d]) ? $dataHarian[$d]['numerator'] : '-' ?></td>
-                          <?php endfor; ?>
-                          <td class="total-cell"><?= $totalNumerator ?></td>
-                          <td rowspan="2" class="total-cell">
-                            <strong><?= number_format($persentaseTotal, 2) ?>%</strong>
-                            <?php if($persentaseTotal >= $standar): ?>
-                              <br><span class="badge badge-success">Tercapai</span>
-                            <?php else: ?>
-                              <br><span class="badge badge-danger">Tidak Tercapai</span>
-                            <?php endif; ?>
-                          </td>
-                          <td rowspan="2">
-                            <?php if($statusValidasi == 'tervalidasi'): ?>
-                              <div class="validasi-info">
-                                <i class="fas fa-check-circle text-success"></i> <strong>TERVALIDASI</strong>
-                                <br><small>Oleh: <?= htmlspecialchars($validasiOleh) ?></small>
-                                <br><small>Tanggal: <?= date('d/m/Y H:i', strtotime($validasiTanggal)) ?></small>
-                                <?php if($catatanValidasi): ?>
-                                  <br><small>Catatan: <?= htmlspecialchars($catatanValidasi) ?></small>
-                                <?php endif; ?>
-                              </div>
-                            <?php elseif($statusValidasi == 'ditolak'): ?>
-                              <div class="validasi-info ditolak">
-                                <i class="fas fa-times-circle text-danger"></i> <strong>DITOLAK</strong>
-                                <br><small>Oleh: <?= htmlspecialchars($validasiOleh) ?></small>
-                                <br><small>Tanggal: <?= date('d/m/Y H:i', strtotime($validasiTanggal)) ?></small>
-                                <?php if($catatanValidasi): ?>
-                                  <br><small>Alasan: <?= htmlspecialchars($catatanValidasi) ?></small>
-                                <?php endif; ?>
-                              </div>
-                            <?php elseif($isPeranggungJawab): ?>
-                              <button class="btn btn-warning btn-validasi" data-toggle="modal" data-target="#validasiModal<?= $jenis ?>_<?= $idInd ?>">
-                                <i class="fas fa-check-double"></i> Validasi Data
-                              </button>
-                              <br><small class="text-muted">Belum divalidasi</small>
-                            <?php else: ?>
-                              <div class="text-center">
-                                <i class="fas fa-hourglass-half text-warning"></i>
-                                <br><small class="text-muted">Belum divalidasi</small>
-                              </div>
-                            <?php endif; ?>
-                          </td>
-                          <td rowspan="2" class="text-center">
-                            <button class="btn btn-info btn-sm" 
-                                    data-toggle="modal" 
-                                    data-target="#chartModal<?= $chartIndex ?>"
-                                    title="Lihat Grafik">
-                              <i class="fas fa-chart-line"></i>
-                            </button>
-                          </td>
-                        </tr>
-                        <!-- Row Denominator -->
-                        <tr>
-                          <td class="indikator-name">Denominator</td>
-                          <?php for($d=1; $d<=$jumlahHari; $d++): ?>
-                            <td><?= isset($dataHarian[$d]) ? $dataHarian[$d]['denominator'] : '-' ?></td>
-                          <?php endfor; ?>
-                          <td class="total-cell"><?= $totalDenominator ?></td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
+            <!-- SUMMARY CARDS -->
+            <div class="row mb-3 no-print">
+              <?php
+              $cards = [
+                ['label'=>'Total Indikator', 'val'=>$rekapRingkas['total'],          'sub'=>$namaBulan[$bulan].' '.$tahun, 'color'=>'#6c757d'],
+                ['label'=>'Tercapai',        'val'=>$rekapRingkas['tercapai'],        'sub'=>'&ge; Standar',                'color'=>'#28a745'],
+                ['label'=>'Tidak Tercapai',  'val'=>$rekapRingkas['tidak_tercapai'],  'sub'=>'&lt; Standar',                'color'=>'#dc3545'],
+                ['label'=>'Tervalidasi TTE', 'val'=>$rekapRingkas['tervalidasi'],     'sub'=>'Sudah ditandatangani',        'color'=>'#007bff'],
+                ['label'=>'Belum Validasi',  'val'=>$rekapRingkas['belum_validasi'],  'sub'=>'Perlu tindak lanjut',         'color'=>'#fd7e14'],
+                ['label'=>'% Capaian',       'val'=>($rekapRingkas['total']>0?round($rekapRingkas['tercapai']/$rekapRingkas['total']*100):0).'%', 'sub'=>'dari total indikator', 'color'=>'#6f42c1'],
+              ];
+              foreach($cards as $c): ?>
+              <div class="col-md-2 col-sm-4 mb-2">
+                <div style="background:<?= $c['color'] ?>;border-radius:8px;padding:8px 12px;color:#fff;height:70px;display:flex;flex-direction:column;justify-content:center;">
+                  <div style="font-size:10px;font-weight:700;text-transform:uppercase;opacity:.85;letter-spacing:.3px;line-height:1.2"><?= $c['label'] ?></div>
+                  <div style="font-size:22px;font-weight:800;line-height:1.1;margin:2px 0"><?= $c['val'] ?></div>
+                  <div style="font-size:10px;opacity:.75"><?= $c['sub'] ?></div>
                 </div>
-                
-                <?php 
-                // Modal Validasi (hanya untuk penanggung jawab)
-                if($isPeranggungJawab && !$statusValidasi):
-                  ob_start(); 
-                  ?>
-                  <div class="modal fade" id="validasiModal<?= $jenis ?>_<?= $idInd ?>" tabindex="-1">
-                    <div class="modal-dialog">
-                      <div class="modal-content">
-                        <form method="POST">
-                          <div class="modal-header bg-warning text-white">
-                            <h5 class="modal-title"><i class="fas fa-check-double"></i> Validasi Data Indikator</h5>
-                            <button type="button" class="close text-white" data-dismiss="modal">&times;</button>
-                          </div>
-                          <div class="modal-body">
-                            <input type="hidden" name="jenis_validasi" value="<?= $jenis ?>">
-                            <input type="hidden" name="id_indikator_validasi" value="<?= $idInd ?>">
-                            <input type="hidden" name="bulan_validasi" value="<?= $bulan ?>">
-                            <input type="hidden" name="tahun_validasi" value="<?= $tahun ?>">
-                            
-                            <div class="alert alert-info">
-                              <i class="fas fa-info-circle"></i> Validasi akan diterapkan untuk <strong>semua data</strong> indikator ini di bulan <?= date('F Y', mktime(0,0,0,$bulan,1,$tahun)) ?>
-                            </div>
-                            
-                            <div class="form-group">
-                              <label><strong>Indikator:</strong></label>
-                              <p class="font-weight-bold"><?= htmlspecialchars($namaIndikator) ?></p>
-                            </div>
-                            <div class="row">
-                              <div class="col-md-6">
-                                <div class="form-group">
-                                  <label><strong>Total Numerator:</strong></label>
-                                  <p class="text-primary font-weight-bold"><?= $totalNumerator ?></p>
-                                </div>
-                              </div>
-                              <div class="col-md-6">
-                                <div class="form-group">
-                                  <label><strong>Total Denominator:</strong></label>
-                                  <p class="text-primary font-weight-bold"><?= $totalDenominator ?></p>
-                                </div>
-                              </div>
-                            </div>
-                            <div class="form-group">
-                              <label><strong>Capaian:</strong></label>
-                              <p class="font-weight-bold text-<?= ($persentaseTotal >= $standar) ? 'success' : 'danger' ?>">
-                                <?= number_format($persentaseTotal, 2) ?>% 
-                                <?php if($persentaseTotal >= $standar): ?>
-                                  <span class="badge badge-success">Tercapai (Standar: <?= $standar ?>%)</span>
-                                <?php else: ?>
-                                  <span class="badge badge-danger">Tidak Tercapai (Standar: <?= $standar ?>%)</span>
-                                <?php endif; ?>
-                              </p>
-                            </div>
-                            <hr>
-                            <div class="form-group">
-                              <label>Status Validasi <span class="text-danger">*</span></label>
-                              <select name="status_validasi" class="form-control" required>
-                                <option value="">-- Pilih Status --</option>
-                                <option value="tervalidasi">✓ Tervalidasi (Data Benar)</option>
-                                <option value="ditolak">✗ Ditolak (Data Perlu Perbaikan)</option>
-                              </select>
-                            </div>
-                            <div class="form-group">
-                              <label>Catatan/Keterangan</label>
-                              <textarea name="catatan_validasi" class="form-control" rows="3" placeholder="Masukkan catatan validasi atau alasan penolakan (opsional)"></textarea>
-                            </div>
-                          </div>
-                          <div class="modal-footer">
-                            <button type="submit" name="validasi" class="btn btn-primary">
-                              <i class="fas fa-save"></i> Simpan Validasi
-                            </button>
-                            <button type="button" class="btn btn-secondary" data-dismiss="modal">
-                              <i class="fas fa-times"></i> Batal
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
-                  <?php 
-                  $modals[] = ob_get_clean();
-                endif;
-                
-                // Modal Grafik dengan inline script (seperti semua_antrian.php)
-                ob_start();
-                
-                // Generate unique modal ID
-                $modalId = 'chartModal' . $chartIndex;
-                $canvasId = 'chart' . $chartIndex;
-                ?>
-                <div class="modal fade" id="<?= $modalId ?>" tabindex="-1" role="dialog">
-                  <div class="modal-dialog modal-xl modal-dialog-centered" role="document" style="max-width:95%;">
-                    <div class="modal-content" style="height:90vh;">
-                      <div class="modal-header bg-info text-white">
-                        <h5 class="modal-title">
-                          <i class="fas fa-chart-line"></i> Grafik Persentase Harian - <?= htmlspecialchars($namaIndikator) ?>
-                        </h5>
-                        <button type="button" class="close text-white" data-dismiss="modal">
-                          <span aria-hidden="true">&times;</span>
-                        </button>
-                      </div>
-                      <div class="modal-body" style="height:calc(100% - 120px);">
-                        <div class="alert alert-info">
-                          <div class="row">
-                            <div class="col-md-4">
-                              <strong>Periode:</strong> <?= date('F Y', mktime(0,0,0,$bulan,1,$tahun)) ?>
-                            </div>
-                            <div class="col-md-4">
-                              <strong>Standar:</strong> <?= $standar ?>%
-                            </div>
-                            <div class="col-md-4">
-                              <strong>Capaian Rata-rata:</strong> 
-                              <span class="badge badge-<?= ($persentaseTotal >= $standar) ? 'success' : 'danger' ?>">
-                                <?= number_format($persentaseTotal, 2) ?>%
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <canvas id="<?= $canvasId ?>" style="width:100%; height:100%;"></canvas>
-                      </div>
-                      <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
-                      </div>
-                    </div>
-                  </div>
+              </div>
+              <?php endforeach; ?>
+            </div>
+
+            <!-- TABEL DATA PER INDIKATOR -->
+            <?php if(count($allData) > 0): ?>
+              <?php $chartIndex = 0; foreach($allData as $i => $d): $chartIndex++; ?>
+
+              <div class="mb-4">
+                <h6 class="mb-1">
+                  <span class="badge badge-<?= $d['jenis']=='nasional'?'primary':($d['jenis']=='rs'?'success':'info') ?>">
+                    <?= strtoupper($d['jenis']) ?>
+                  </span>
+                  <?= htmlspecialchars($d['nama']) ?>
+                  <?php if($d['unit']): ?>
+                    <span class="badge badge-light border"><?= htmlspecialchars($d['unit']) ?></span>
+                  <?php endif; ?>
+                  <small class="text-muted ml-1">(PJ: <?= htmlspecialchars($d['pj']) ?>)</small>
+                  <?php if($d['tercapai']): ?>
+                    <span class="badge badge-success ml-1"><i class="fas fa-check-circle"></i> Tercapai</span>
+                  <?php else: ?>
+                    <span class="badge badge-danger ml-1"><i class="fas fa-times-circle"></i> Tidak Tercapai</span>
+                  <?php endif; ?>
+                  <button class="btn btn-info btn-sm ml-2 no-print" data-toggle="modal" data-target="#chartModal<?= $chartIndex ?>">
+                    <i class="fas fa-chart-bar"></i> Grafik
+                  </button>
+                </h6>
+                <div class="formula-text">
+                  <strong>Numerator:</strong> <?= htmlspecialchars($d['num_def']) ?> &nbsp;|&nbsp;
+                  <strong>Denominator:</strong> <?= htmlspecialchars($d['den_def']) ?> &nbsp;|&nbsp;
+                  <strong>Standar:</strong> <?= $d['standar'] ?>%
                 </div>
-                
-                <script>
-                (function() {
-                  let myChart_<?= $chartIndex ?>;
-                  
-                  $('#<?= $modalId ?>').on('shown.bs.modal', function () {
-                    const ctx = document.getElementById('<?= $canvasId ?>');
-                    if (!ctx) {
-                      console.error('Canvas <?= $canvasId ?> not found!');
-                      return;
-                    }
-                    
-                    const labels = <?= json_encode($chartLabels) ?>;
-                    const data = <?= json_encode($chartData) ?>;
-                    const standar = <?= $standar ?>;
-                    
-                    console.log('Opening chart <?= $chartIndex ?>');
-                    console.log('Labels:', labels);
-                    console.log('Data:', data);
-                    
-                    if (labels.length === 0) {
-                      ctx.getContext('2d').fillText("Tidak ada data", 20, 50);
-                      return;
-                    }
-                    
-                    if (myChart_<?= $chartIndex ?>) {
-                      myChart_<?= $chartIndex ?>.destroy();
-                    }
-                    
-                    const standardLine = Array(labels.length).fill(standar);
-                    
-                    myChart_<?= $chartIndex ?> = new Chart(ctx, {
-                      type: 'bar',
-                      data: {
-                        labels: labels,
-                        datasets: [{
-                          label: 'Persentase Harian (%)',
-                          data: data,
-                          backgroundColor: data.map(val => val >= standar ? 'rgba(40, 167, 69, 0.8)' : 'rgba(255, 193, 7, 0.8)'),
-                          borderColor: data.map(val => val >= standar ? 'rgba(40, 167, 69, 1)' : 'rgba(255, 193, 7, 1)'),
-                          borderWidth: 2,
-                          borderRadius: 5,
-                          hoverBackgroundColor: data.map(val => val >= standar ? 'rgba(40, 167, 69, 1)' : 'rgba(255, 193, 7, 1)'),
-                        }, {
-                          label: 'Target Standar (' + standar + '%)',
-                          data: standardLine,
-                          type: 'line',
-                          borderColor: 'rgba(220, 53, 69, 1)',
-                          backgroundColor: 'transparent',
-                          borderWidth: 3,
-                          borderDash: [10, 5],
-                          pointRadius: 0,
-                          pointHoverRadius: 6,
-                          pointHoverBackgroundColor: 'rgba(220, 53, 69, 1)',
-                          pointHoverBorderColor: '#fff',
-                          pointHoverBorderWidth: 3,
-                          order: 0
-                        }]
-                      },
-                      options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        animation: { 
-                          duration: 1000,
-                          easing: 'easeInOutQuart'
-                        },
-                        interaction: {
-                          mode: 'index',
-                          intersect: false
-                        },
-                        plugins: {
-                          legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                              font: { size: 13, weight: 'bold' },
-                              padding: 20,
-                              usePointStyle: true,
-                              pointStyle: 'rectRounded'
-                            }
-                          },
-                          tooltip: {
-                            backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                            titleFont: { size: 14, weight: 'bold' },
-                            bodyFont: { size: 13 },
-                            padding: 15,
-                            cornerRadius: 8,
-                            displayColors: true,
-                            callbacks: {
-                              title: function(context) {
-                                return 'Tanggal ' + context[0].label + ' <?= date('F Y', mktime(0,0,0,$bulan,1,$tahun)) ?>';
-                              },
-                              label: function(context) {
-                                let label = context.dataset.label + ': ' + context.parsed.y.toFixed(2) + '%';
-                                if (context.datasetIndex === 0 && context.parsed.y > 0) {
-                                  if (context.parsed.y >= standar) {
-                                    label += ' ✓ Tercapai';
-                                  } else {
-                                    label += ' ⚠ Belum Tercapai';
-                                  }
-                                }
-                                return label;
-                              }
-                            }
-                          },
-                          title: {
-                            display: true,
-                            text: 'Grafik Persentase Capaian Harian',
-                            font: { size: 16, weight: 'bold' },
-                            padding: { top: 10, bottom: 20 }
-                          }
-                        },
-                        scales: {
-                          x: {
-                            grid: {
-                              display: false
-                            },
-                            ticks: {
-                              font: { size: 11 }
-                            },
-                            title: {
-                              display: true,
-                              text: 'Tanggal',
-                              font: { size: 13, weight: 'bold' },
-                              padding: { top: 10 }
-                            }
-                          },
-                          y: {
-                            beginAtZero: true,
-                            max: 100,
-                            grid: {
-                              color: 'rgba(0, 0, 0, 0.05)',
-                              drawBorder: false
-                            },
-                            ticks: {
-                              callback: function(value) {
-                                return value + '%';
-                              },
-                              font: { size: 11 }
-                            },
-                            title: {
-                              display: true,
-                              text: 'Persentase Capaian (%)',
-                              font: { size: 13, weight: 'bold' },
-                              padding: { bottom: 10 }
-                            }
-                          }
-                        }
-                      }
-                    });
-                    
-                    console.log('Chart <?= $chartIndex ?> created!');
-                  });
-                  
-                  $('#<?= $modalId ?>').on('hidden.bs.modal', function () {
-                    if (myChart_<?= $chartIndex ?>) {
-                      myChart_<?= $chartIndex ?>.destroy();
-                      myChart_<?= $chartIndex ?> = null;
-                    }
-                  });
-                })();
-                </script>
-                <?php 
-                $modals[] = ob_get_clean();
-                ?>
-                
-              <?php endwhile;
-            else: ?>
+
+                <div class="table-responsive">
+                  <table class="table table-bordered table-rekap table-sm">
+                    <thead>
+                      <tr>
+                        <th rowspan="2" class="cell-nama">Komponen</th>
+                        <?php for($dd=1;$dd<=$jumlahHari;$dd++): ?>
+                        <th class="day-cell"><?=$dd?></th>
+                        <?php endfor; ?>
+                        <th rowspan="2" class="total-cell">Total</th>
+                        <th rowspan="2" style="min-width:80px">Capaian</th>
+                        <th rowspan="2" style="min-width:130px">Validasi TTE</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <!-- Numerator -->
+                      <tr class="num-row">
+                        <td class="cell-nama">Numerator</td>
+                        <?php for($dd=1;$dd<=$jumlahHari;$dd++): ?>
+                        <td class="day-cell"><?= isset($d['harian'][$dd]) ? $d['harian'][$dd]['numerator'] : '-' ?></td>
+                        <?php endfor; ?>
+                        <td class="total-cell"><?= $d['totalNum'] ?></td>
+                        <td rowspan="3" class="total-cell text-center" style="vertical-align:middle">
+                          <strong><?= number_format($d['persen'],2) ?>%</strong>
+                          <?php if($d['tercapai']): ?>
+                            <br><span class="badge badge-success">Tercapai</span>
+                          <?php else: ?>
+                            <br><span class="badge badge-danger">Tidak Tercapai</span>
+                          <?php endif; ?>
+                          <br><small class="text-muted">standar <?= $d['standar'] ?>%</small>
+                        </td>
+                        <td rowspan="3" class="text-center" style="vertical-align:middle">
+                          <?php if($d['statusValidasi']=='tervalidasi'): ?>
+                            <div class="text-success mb-1">
+                              <i class="fas fa-check-circle"></i> <strong>TERVALIDASI</strong>
+                            </div>
+                            <?php if($d['tteToken']): ?>
+                            <img src="https://api.qrserver.com/v1/create-qr-code/?size=70x70&data=<?= urlencode('http://'.$_SERVER['HTTP_HOST'].'/cek_tte.php?token='.$d['tteToken']) ?>" style="width:70px;height:70px" alt="QR TTE">
+                            <?php endif; ?>
+                            <div class="validasi-info text-muted mt-1">
+                              Oleh: <strong><?= htmlspecialchars($d['validasiOleh']) ?></strong><br>
+                              <?= $d['validasiTanggal'] ? date('d/m/Y H:i',strtotime($d['validasiTanggal'])) : '' ?>
+                            </div>
+                          <?php elseif($d['statusValidasi']=='ditolak'): ?>
+                            <div class="text-danger">
+                              <i class="fas fa-times-circle"></i> <strong>DITOLAK</strong>
+                            </div>
+                            <small class="text-muted"><?= htmlspecialchars($d['catatanValidasi']) ?></small>
+                          <?php else: ?>
+                            <div class="text-warning">
+                              <i class="fas fa-hourglass-half"></i>
+                              <br><small class="text-muted">Belum Divalidasi</small>
+                            </div>
+                          <?php endif; ?>
+                        </td>
+                      </tr>
+                      <!-- Denominator -->
+                      <tr class="den-row">
+                        <td class="cell-nama">Denominator</td>
+                        <?php for($dd=1;$dd<=$jumlahHari;$dd++): ?>
+                        <td class="day-cell"><?= isset($d['harian'][$dd]) ? $d['harian'][$dd]['denominator'] : '-' ?></td>
+                        <?php endfor; ?>
+                        <td class="total-cell"><?= $d['totalDen'] ?></td>
+                      </tr>
+                      <!-- % Harian -->
+                      <tr class="pct-row">
+                        <td class="cell-nama" style="font-size:10px">% Harian</td>
+                        <?php for($dd=1;$dd<=$jumlahHari;$dd++):
+                          $ph = isset($d['harian'][$dd]) && $d['harian'][$dd]['denominator']>0
+                            ? round($d['harian'][$dd]['numerator']/$d['harian'][$dd]['denominator']*100,1) : null;
+                        ?>
+                        <td class="day-cell <?= $ph!==null?($ph>=$d['standar']?'pct-ok':'pct-fail'):'' ?>">
+                          <?= $ph!==null ? $ph.'%' : '-' ?>
+                        </td>
+                        <?php endfor; ?>
+                        <td class="total-cell" style="font-size:10px"><?= number_format($d['persen'],2) ?>%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <?php endforeach; ?>
+
+            <?php else: ?>
               <div class="alert alert-info text-center">
-                <i class="fas fa-info-circle"></i> Tidak ada data untuk periode dan filter yang dipilih.
+                <i class="fas fa-info-circle"></i> Tidak ada data indikator untuk periode dan filter yang dipilih.
               </div>
             <?php endif; ?>
 
@@ -762,6 +455,49 @@ $modals = [];
   </div>
 </div>
 
+<!-- MODAL GRAFIK - di luar main-wrapper, setelah semua library dimuat -->
+<?php 
+$chartIndex = 0;
+foreach($allData as $i => $d):
+    $chartIndex++;
+    $chartLabels = [];
+    $chartData   = [];
+    for($dd=1;$dd<=$jumlahHari;$dd++){
+        $chartLabels[] = $dd;
+        $ph = isset($d['harian'][$dd]) && $d['harian'][$dd]['denominator']>0
+            ? round($d['harian'][$dd]['numerator']/$d['harian'][$dd]['denominator']*100,2) : 0;
+        $chartData[] = $ph;
+    }
+?>
+<div class="modal fade" id="chartModal<?= $chartIndex ?>" tabindex="-1" role="dialog">
+  <div class="modal-dialog modal-xl modal-dialog-centered" role="document" style="max-width:95%">
+    <div class="modal-content" style="height:90vh">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-chart-bar"></i> Grafik Capaian Harian – <?= htmlspecialchars($d['nama']) ?>
+        </h5>
+        <button type="button" class="close text-white" data-dismiss="modal"><span>&times;</span></button>
+      </div>
+      <div class="modal-body" style="height:calc(100% - 115px)">
+        <div class="alert alert-info py-2">
+          <div class="row">
+            <div class="col-md-4"><strong>Periode:</strong> <?= $namaBulan[$bulan].' '.$tahun ?></div>
+            <div class="col-md-4"><strong>Standar:</strong> <?= $d['standar'] ?>%</div>
+            <div class="col-md-4"><strong>Capaian:</strong>
+              <span class="badge badge-<?= $d['tercapai']?'success':'danger' ?>"><?= number_format($d['persen'],2) ?>%</span>
+            </div>
+          </div>
+        </div>
+        <canvas id="myChart<?= $chartIndex ?>" style="width:100%;height:100%"></canvas>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Tutup</button>
+      </div>
+    </div>
+  </div>
+</div>
+<?php endforeach; ?>
+
 <script src="assets/modules/jquery.min.js"></script>
 <script src="assets/modules/popper.js"></script>
 <script src="assets/modules/bootstrap/js/bootstrap.min.js"></script>
@@ -770,102 +506,93 @@ $modals = [];
 <script src="assets/js/stisla.js"></script>
 <script src="assets/js/scripts.js"></script>
 <script src="assets/js/custom.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
-$(document).ready(function(){
-  setTimeout(function(){ $("#flashMsg").fadeOut("slow"); }, 3000);
-  
-  $('.select2').select2({
-    placeholder: "-- Semua Indikator --",
-    allowClear: true,
-    width: '100%'
-  });
-  
-  var indikatorData = <?= json_encode($indikatorList) ?>;
-  
-  function updateIndikatorFilter() {
-    var jenis = $('#jenisFilter').val();
-    var $indFilter = $('#indikatorFilter');
-    var currentValue = $indFilter.val();
-    
-    $indFilter.empty().append('<option value="">-- Semua Indikator --</option>');
-    
-    if(jenis && indikatorData[jenis]) {
-      indikatorData[jenis].forEach(function(opt) {
-        var selected = (opt.id == currentValue) ? 'selected' : '';
-        $indFilter.append('<option value="'+opt.id+'" '+selected+'>'+opt.nama_indikator+'</option>');
-      });
-    }
-    
-    $indFilter.trigger('change');
-  }
-  
-  // Initialize on load
-  updateIndikatorFilter();
-  
-  // Set selected value if exists
-  <?php if($id_indikator > 0): ?>
-  $('#indikatorFilter').val(<?= $id_indikator ?>).trigger('change');
-  <?php endif; ?>
-});
+(function(){
+  var chartLabels = <?= json_encode($chartLabels) ?>;
+  var chartData   = <?= json_encode($chartData) ?>;
+  var standar     = <?= $d['standar'] ?>;
+  var myChart;
 
-// Fungsi Print
-function printLaporan() {
-  window.print();
-}
-
-// Fungsi Export Excel
-function exportExcel() {
-  var periode = "<?= date('F_Y', mktime(0,0,0,$bulan,1,$tahun)) ?>";
-  var filename = "Rekap_Laporan_Harian_" + periode + ".xls";
-  
-  var tables = document.querySelectorAll('.table-rekap');
-  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-  html += '<head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Laporan</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>';
-  html += '<body>';
-  html += '<h2>REKAP LAPORAN INPUT HARIAN</h2>';
-  html += '<p>Periode: <?= date('F Y', mktime(0,0,0,$bulan,1,$tahun)) ?></p>';
-  html += '<br>';
-  
-  tables.forEach(function(table) {
-    html += table.outerHTML;
-    html += '<br><br>';
-  });
-  
-  html += '</body></html>';
-  
-  var blob = new Blob([html], {
-    type: 'application/vnd.ms-excel'
-  });
-  
-  var link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-}
-
-window.updateIndikatorFilter = function() {
-  var jenis = $('#jenisFilter').val();
-  var $indFilter = $('#indikatorFilter');
-  var indikatorData = <?= json_encode($indikatorList) ?>;
-  
-  $indFilter.empty().append('<option value="">-- Semua Indikator --</option>');
-  
-  if(jenis && indikatorData[jenis]) {
-    indikatorData[jenis].forEach(function(opt) {
-      $indFilter.append('<option value="'+opt.id+'">'+opt.nama_indikator+'</option>');
+  $('#chartModal<?= $chartIndex ?>').on('shown.bs.modal', function(){
+    var ctx = document.getElementById('myChart<?= $chartIndex ?>');
+    if(myChart) myChart.destroy();
+    myChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: chartLabels,
+        datasets: [{
+          label: 'Capaian Harian (%)',
+          data: chartData,
+          backgroundColor: chartData.map(function(v){ return v>=standar?'rgba(40,167,69,.8)':'rgba(220,53,69,.7)'; }),
+          borderColor:     chartData.map(function(v){ return v>=standar?'rgba(40,167,69,1)':'rgba(220,53,69,1)'; }),
+          borderWidth: 2, borderRadius: 4
+        },{
+          label: 'Standar ('+standar+'%)',
+          data: Array(chartLabels.length).fill(standar),
+          type: 'line',
+          borderColor: 'rgba(255,193,7,1)',
+          backgroundColor: 'transparent',
+          borderWidth: 3,
+          borderDash: [8,4],
+          pointRadius: 0
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: true, position: 'top' },
+          tooltip: {
+            callbacks: {
+              title: function(c){ return 'Tanggal '+c[0].label+' <?= $namaBulan[$bulan].' '.$tahun ?>'; },
+              label: function(c){
+                var v = c.parsed.y;
+                var l = c.dataset.label+': '+v.toFixed(2)+'%';
+                if(c.datasetIndex===0) l += v>=standar?' \u2713 Tercapai':' \u2717 Tidak Tercapai';
+                return l;
+              }
+            }
+          }
+        },
+        scales: {
+          x: { title: { display:true, text:'Tanggal' } },
+          y: { beginAtZero:true, max:100,
+               title: { display:true, text:'Persentase (%)' },
+               ticks: { callback: function(v){ return v+'%'; } } }
+        }
+      }
     });
-  }
-  
-  $indFilter.trigger('change');
-};
+  });
+  $('#chartModal<?= $chartIndex ?>').on('hidden.bs.modal', function(){
+    if(myChart){ myChart.destroy(); myChart=null; }
+  });
+})();
 </script>
 
-<?php
-foreach ($modals as $m) echo $m;
-?>
 
+<script>
+$(document).ready(function(){
+  setTimeout(function(){ $('#flashMsg').fadeOut('slow'); }, 3000);
+});
+
+function exportExcel(){
+  var periode  = '<?= $namaBulan[$bulan].'_'.$tahun ?>';
+  var filename = 'Capaian_IMUT_' + periode + '.xls';
+  var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office">';
+  html += '<head><meta charset="UTF-8"></head><body>';
+  html += '<h2>CAPAIAN INDIKATOR MUTU – PMKP</h2>';
+  html += '<p>Periode: <?= $namaBulan[$bulan].' '.$tahun ?></p><br>';
+  document.querySelectorAll('.table-rekap').forEach(function(t){
+    html += t.outerHTML + '<br><br>';
+  });
+  html += '</body></html>';
+  var blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+}
+</script>
 </body>
 </html>
